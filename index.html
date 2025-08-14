@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StormPlane - Repack</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/full/pyodide.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script type="text/javascript">
+        async function main() {
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage(["micropip"]);
+            await pyodide.runPythonAsync(await (await fetch("main.py")).text());
+        }
+        main();
+    </script>
+</body>
+</html>
