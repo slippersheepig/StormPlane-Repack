@@ -15,14 +15,19 @@
 
     <script>
         async function main() {
-            let pyodide = await loadPyodide();
-            await pyodide.loadPackage(["micropip"]);
-            await pyodide.runPythonAsync(`
+            try {
+                let pyodide = await loadPyodide();
+                await pyodide.loadPackage(["micropip"]);
+                await pyodide.runPythonAsync(`
 import micropip
 await micropip.install([])
 `);
-            document.getElementById("loading").style.display = "none";
-            await pyodide.runPythonAsync(await (await fetch("main.py")).text());
+                document.getElementById("loading").style.display = "none";
+                const code = await (await fetch("main.py")).text();
+                await pyodide.runPythonAsync(code);
+            } catch (err) {
+                console.error("加载失败：", err);
+            }
         }
         main();
     </script>
