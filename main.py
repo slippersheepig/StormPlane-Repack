@@ -2,6 +2,7 @@ from js import document, window
 import math
 import random
 from utils import rects_collide, clamp
+from pyodide.ffi import create_proxy
 
 # ===== Canvas =====
 canvas = document.getElementById("game-canvas")
@@ -12,7 +13,8 @@ def resize_canvas():
     canvas.height = window.innerHeight
 
 resize_canvas()
-window.addEventListener("resize", lambda e: resize_canvas())
+_resize_proxy = create_proxy(lambda e: resize_canvas())
+window.addEventListener("resize", _resize_proxy)
 
 # ===== 使用原仓库文件名（保持后缀一致） =====
 IMAGES = {
@@ -69,13 +71,20 @@ def _unlock_audio(_evt=None):
         except Exception as _e:
             pass
         _audio_unlocked["value"] = True
-        document.removeEventListener("touchstart", _unlock_audio)
-        document.removeEventListener("mousedown", _unlock_audio)
-        document.removeEventListener("keydown", _unlock_audio)
+        document.removeEventListener("touchstart", _unlock_touch_proxy)
+        document.removeEventListener("mousedown", _unlock_mouse_proxy)
+        document.removeEventListener("keydown", _unlock_key_proxy)
+        try:
+            _unlock_touch_proxy.destroy(); _unlock_mouse_proxy.destroy(); _unlock_key_proxy.destroy()
+        except Exception as _:
+            pass
 
-document.addEventListener("touchstart", _unlock_audio)
-document.addEventListener("mousedown", _unlock_audio)
-document.addEventListener("keydown", _unlock_audio)
+_unlock_touch_proxy = create_proxy(_unlock_audio)
+_unlock_mouse_proxy = create_proxy(_unlock_audio)
+_unlock_key_proxy = create_proxy(_unlock_audio)
+document.addEventListener("touchstart", _unlock_touch_proxy)
+document.addEventListener("mousedown", _unlock_mouse_proxy)
+document.addEventListener("keydown", _unlock_key_proxy)
 
 # ===== 背景滚动 =====
 bg_scroll_y = 0
@@ -191,8 +200,10 @@ def on_key_up(e):
     if e.key in keys:
         keys[e.key] = 0
 
-document.addEventListener("keydown", on_key_down)
-document.addEventListener("keyup", on_key_up)
+_keydown_proxy = create_proxy(on_key_down)
+_keyup_proxy = create_proxy(on_key_up)
+document.addEventListener("keydown", _keydown_proxy)
+document.addEventListener("keyup", _keyup_proxy)
 
 # 触摸拖动
 _touch = {"x": None, "y": None}
@@ -214,9 +225,12 @@ def on_touch_end(e):
     _touch["x"] = None
     _touch["y"] = None
 
-canvas.addEventListener("touchstart", on_touch_start)
-canvas.addEventListener("touchmove", on_touch_move)
-canvas.addEventListener("touchend", on_touch_end)
+_touchstart_proxy = create_proxy(on_touch_start)
+_touchmove_proxy = create_proxy(on_touch_move)
+_touchend_proxy = create_proxy(on_touch_end)
+canvas.addEventListener("touchstart", _touchstart_proxy)
+canvas.addEventListener("touchmove", _touchmove_proxy)
+canvas.addEventListener("touchend", _touchend_proxy)
 
 # ===== 生成敌机 =====
 def spawn_enemy():
@@ -306,7 +320,7 @@ def update():
     ctx.fillText(f"Score: {score}", 12, 28)
 
     if not game_over:
-        window.requestAnimationFrame(lambda *_: update())
+        window.requestAnimationFrame(_raf_proxy)
     else:
         ctx.fillStyle = "rgba(0,0,0,0.45)"
         ctx.fillRect(0, 0, canvas.width, canvas.height)
@@ -315,4 +329,5 @@ def update():
         ctx.fillText("GAME OVER", canvas.width/2 - 120, canvas.height/2)
 
 # 启动
+_raf_proxy = create_proxy(lambda *_: update())
 update()
