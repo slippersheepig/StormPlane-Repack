@@ -22,6 +22,7 @@ import micropip
 await micropip.install([])
 `);
             document.getElementById("loading").style.display = "none";
+            await pyodide.runPythonAsync(await (await fetch("utils.py")).text());
             await pyodide.runPythonAsync(await (await fetch("main.py")).text());
         }
         main();
