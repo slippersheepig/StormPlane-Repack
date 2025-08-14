@@ -1,10 +1,9 @@
 def rects_collide(a, b):
-    """检测两个矩形是否碰撞"""
     return not (
-        a.x + a.width < b.x or
-        a.x > b.x + b.width or
-        a.y + a.height < b.y or
-        a.y > b.y + b.height
+        a.rect.x + a.rect.width < b.rect.x or
+        a.rect.x > b.rect.x + b.rect.width or
+        a.rect.y + a.rect.height < b.rect.y or
+        a.rect.y > b.rect.y + b.rect.height
     )
 
 def clamp(value, min_value, max_value):
