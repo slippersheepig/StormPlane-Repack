@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StormPlane - Repack</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>沙漠风暴 - Repack</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/full/pyodide.js"></script>
 </head>
 <body>
     <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
+        <canvas id="game-canvas"></canvas>
+        <div id="loading">资源加载中...</div>
     </div>
 
-    <script type="text/javascript">
+    <script>
         async function main() {
-            const pyodide = await loadPyodide();
+            let pyodide = await loadPyodide();
             await pyodide.loadPackage(["micropip"]);
+            await pyodide.runPythonAsync(`
+import micropip
+await micropip.install([])
+`);
+            document.getElementById("loading").style.display = "none";
             await pyodide.runPythonAsync(await (await fetch("main.py")).text());
         }
         main();
