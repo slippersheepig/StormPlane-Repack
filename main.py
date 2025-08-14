@@ -191,6 +191,31 @@ def game_loop(timestamp):
     global animation_id
     animation_id = window.requestAnimationFrame(game_loop)
 
+# ===== 触屏事件 =====
+touch_start_x = None
+touch_start_y = None
+
+def on_touch_start(e):
+    global touch_start_x, touch_start_y
+    touch = e.touches.item(0)
+    touch_start_x = touch.clientX
+    touch_start_y = touch.clientY
+    e.preventDefault()
+
+def on_touch_move(e):
+    global touch_start_x, touch_start_y
+    touch = e.touches.item(0)
+    dx = touch.clientX - touch_start_x
+    dy = touch.clientY - touch_start_y
+    player.x += dx
+    player.y += dy
+    touch_start_x = touch.clientX
+    touch_start_y = touch.clientY
+    e.preventDefault()
+
+canvas.addEventListener("touchstart", on_touch_start)
+canvas.addEventListener("touchmove", on_touch_move)
+
 # ===== 启动 =====
 async def start_game():
     asyncio.create_task(auto_fire())
