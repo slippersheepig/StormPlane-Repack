@@ -667,7 +667,6 @@ def first_frame():
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.fillStyle = "white"
     ctx.font = "24px Arial"
-    ctx.fillText("点击“开始游戏”按钮进入", 20, canvas.height/2 + 40)
 
 _raf_proxy = create_proxy(lambda *_: update())
 first_frame()
