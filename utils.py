@@ -13,5 +13,24 @@ def rects_collide(a, b):
     )
 
 def clamp(value, min_value, max_value):
-    """限制 value 在 [min_value, max_value] 范围内"""
-    return max(min_value, min(value, max_value))
+    # 限制 value 在 [min_value, max_value] 范围内
+    if value < min_value:
+        return min_value
+    if value > max_value:
+        return max_value
+    return value
+
+import random
+from js import Image
+
+def randf(a, b):
+    return random.random()*(b-a)+a
+
+def load_sprite(path):
+    # 尝试加载图片，失败则返回 None
+    try:
+        img = Image.new()
+        img.src = path
+        return img
+    except Exception:
+        return None
