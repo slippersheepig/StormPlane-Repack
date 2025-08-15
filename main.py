@@ -35,40 +35,30 @@ def fit_canvas():
     if container is not None:
         try:
             rect = container.getBoundingClientRect()
-            w = int(rect.width)
-            h = int(rect.height)
+            w = rect.width
+            h = rect.height
         except Exception as e:
             console.warn("fit_canvas: getBoundingClientRect failed: " + str(e))
-            w = int(window.innerWidth)
-            h = int(window.innerHeight)
+            w = window.innerWidth or document.documentElement.clientWidth or 0
+            h = window.innerHeight or document.documentElement.clientHeight or 0
     else:
-        w = int(window.innerWidth)
-        h = int(window.innerHeight)
-
-    global canvas, ctx
-    if canvas is None:
-        canvas, ctx = ensure_canvas_and_ctx()
-
-    try:
-        canvas.width = w
-        canvas.height = h
-    except Exception as e:
-        console.warn("fit_canvas: failed to set canvas size: " + str(e))
-
-    # Keep CSS size consistent so getBoundingClientRect works predictably
-    try:
-        canvas.style.width = f"{w}px"
-        canvas.style.height = f"{h}px"
-    except Exception:
-        pass
-
-    # device pixel ratio scaling (best-effort)
+        # Fallback: entire viewport
+        w = window.innerWidth or document.documentElement.clientWidth or 0
+        h = window.innerHeight or document.documentElement.clientHeight or 0
     try:
         dpr = window.devicePixelRatio or 1
     except Exception:
         dpr = 1
     if ctx:
         try:
+            # 调整绘图尺寸
+            canvas.width = w
+            canvas.height = h
+        except Exception:
+            # 某些环境下canvas.width/height的类型可能不同，忽略
+            pass
+        try:
+            # 重置缩放系数后按窗口缩放
             ctx.setTransform(1,0,0,1,0,0)
             ctx.scale(dpr, dpr)
         except Exception:
@@ -78,7 +68,6 @@ def fit_canvas():
 # Run initial fit and register resize + DOMContentLoaded hooks
 fit_canvas()
 window.addEventListener("resize", create_proxy(lambda e: fit_canvas()))
-# If main.py loaded before DOM ready, also run fit when DOM becomes ready
 document.addEventListener("DOMContentLoaded", create_proxy(lambda e: fit_canvas()), {"once": True})
 
 # HUD elements
@@ -94,15 +83,15 @@ diff_buttons = menu.querySelectorAll(".btns button")
 selected_diff = "normal"
 for i in range(diff_buttons.length):
     b = diff_buttons.item(i)
-    def make_handler(btn):
-        def on_click(evt):
-            global selected_diff
-            for j in range(diff_buttons.length):
-                diff_buttons.item(j).classList.remove("active")
-            btn.classList.add("active")
-            selected_diff = btn.getAttribute("data-diff")
-        return on_click
-    b.addEventListener("click", create_proxy(make_handler(b)))
+    def on_diff(evt, btn=b):
+        global selected_diff
+        # 切换选中状态
+        for k in range(diff_buttons.length):
+            diff_buttons.item(k).classList.remove("active")
+        btn.classList.add("active")
+        selected_diff = btn.getAttribute("data-diff")
+    b.addEventListener("click", create_proxy(on_diff))
+# 预先设定普通难度为默认
 diff_buttons.item(1).classList.add("active")  # normal default
 
 game_over = False
@@ -114,11 +103,17 @@ DIFF = {
     "normal": {"enemy_rate": 0.022, "enemy_speed": (1.8,2.8), "bullet_rate": 0.008, "boss_hp": 1800},
     "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
 }
-
 DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
 
 IMG_BASE = "./img"
 SND_BASE = "./sound"
+
+# 将路径转成 Image 对象；若主名不存在则用已知别名兜底
+from js import Image
+def _to_img(path):
+    img = Image.new()
+    img.src = path
+    return img
 
 # 首选命名
 SPRITES = {
@@ -132,18 +127,12 @@ SPRITES = {
     "bullet_blue":  f"{IMG_BASE}/blue_bullet.png",
     "enemy_bullet": f"{IMG_BASE}/big_enemy_bullet.png",
     "explosion":    f"{IMG_BASE}/boom.png",
-    "power_weapon": f"{IMG_BASE}/bullet_goods1.png",   # 武器升级
-    "power_shield": f"{IMG_BASE}/plane_shield.png",    # 护盾
-    "power_heal":   f"{IMG_BASE}/life_goods.png",      # 回血
+    "power_weapon": f"{IMG_BASE}/bullet_goods1.png",
+    "power_shield": f"{IMG_BASE}/plane_shield.png",
+    "power_heal":   f"{IMG_BASE}/life_goods.png",
+    "power_missile":f"{IMG_BASE}/missile_goods.png",
+    "text":         f"{IMG_BASE}/text.png",
 }
-
-# 将路径转成 Image 对象；若主名不存在则用已知别名兜底
-from js import Image
-def _to_img(path):
-    img = Image.new()
-    img.src = path
-    return img
-
 for k, p in list(SPRITES.items()):
     try:
         SPRITES[k] = _to_img(p)
@@ -151,7 +140,7 @@ for k, p in list(SPRITES.items()):
         SPRITES[k] = None
 
 def _fallback(key, *alts):
-    if SPRITES.get(key) is not None: 
+    if SPRITES.get(key) is not None:
         return
     for ap in alts:
         try:
@@ -159,7 +148,6 @@ def _fallback(key, *alts):
             return
         except Exception:
             continue
-    SPRITES[key] = None
 
 _fallback("enemy_small", f"{IMG_BASE}/small.png")
 _fallback("enemy_big",   f"{IMG_BASE}/big.png")
@@ -168,6 +156,9 @@ _fallback("enemy_bullet",f"{IMG_BASE}/bigplane_bullet.png")
 _fallback("explosion",   f"{IMG_BASE}/myplaneexplosion.png")
 # 备选的武器道具图（存在就换）
 _fallback("power_weapon", f"{IMG_BASE}/bullet_goods2.png", f"{IMG_BASE}/purple_bullet_goods.png", f"{IMG_BASE}/red_bullet_goods.png")
+_fallback("power_shield", f"{IMG_BASE}/plane_shield.png")
+_fallback("power_heal",   f"{IMG_BASE}/life_goods.png")
+_fallback("power_missile",f"{IMG_BASE}/missile_goods.png")
 
 SOUNDS = {
     "shoot":  f"{SND_BASE}/shoot.mp3",
@@ -178,6 +169,7 @@ SOUNDS = {
     "bgm":    f"{SND_BASE}/game.mp3",
 }
 
+# Helper: 播放声音
 def play_sound(key, vol=0.7):
     try:
         from js import Audio
@@ -188,7 +180,6 @@ def play_sound(key, vol=0.7):
     except Exception:
         pass
 
-# Entities
 class Player:
     def __init__(self):
         self.x = canvas.width/2 - 24
@@ -380,18 +371,35 @@ class Explosion:
     def update(self):
         self.t -= 1
 
-player = Player()
-enemies = []
-bullets = []
-powers = []
-effects = []
-boss = None
-score = 0
-frame = 0
-shake = 0
-spawn_boss_at = 500  # score threshold
+def rects_collide(a, b):
+    ax = a.x; ay = a.y; aw = a.w; ah = a.h
+    bx = b.x; by = b.y; bw = b.w; bh = b.h
+    return (ax < bx+bw and ax+aw > bx and ay < by+bh and ay+ah > by)
 
-keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
+def randf():
+    return Math.random()
+
+def update_hud():
+    score_el.innerText = f"分数：{int(score)}"
+    lives_el.innerText = f"生命：{player.hp}"
+    level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}"
+
+def spawn_enemy():
+    kind = "small" if Math.random() < 0.7 else "big"
+    enemies.append(Enemy(kind))
+
+def spawn_power(x, y):
+    r = Math.random()
+    kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
+    powers.append(PowerUp(kind, x, y))
+
+spawn_boss_at = 10000  # 初始触发大Boss的分数阈值
+boss = None
+
+def maybe_spawn_boss():
+    global boss
+    if boss is None and score >= spawn_boss_at:
+        boss = Boss()
 
 def reset_game():
     global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake
@@ -409,62 +417,40 @@ touch_id = None
 def setup_controls():
     def keydown(e):
         k = e.key
-        if k in keys: keys[k]=True
-        if k==" " or k=="Spacebar": keys["Space"]=True
-    def keyup(e):
-        k = e.key
-        if k in keys: keys[k]=False
-        if k==" " or k=="Spacebar": keys["Space"]=False
-
-    window.addEventListener("keydown", create_proxy(keydown))
-    window.addEventListener("keyup", create_proxy(keyup))
-
-    # Touch handlers on canvas
+        if k == "ArrowLeft": player.x = max(0, player.x - 5)
+        elif k == "ArrowRight": player.x = min(canvas.width-player.w, player.x + 5)
+        elif k == "ArrowUp": player.y = max(0, player.y - 5)
+        elif k == "ArrowDown": player.y = min(canvas.height-player.h, player.y + 5)
+        elif k == " " or k == "Enter": player.shoot()
+    document.body.addEventListener("keydown", create_proxy(keydown))
     def on_touchstart(e):
-        global touch_active, touch_id
-        e.preventDefault()
-        if e.touches.length > 0:
-            t = e.touches.item(0)
-            # 确保 canvas 存在（如果不存在尝试重新创建/获取）
-            global canvas, ctx
-            if canvas is None:
-                canvas, ctx = ensure_canvas_and_ctx()
-                if canvas is None:
-                    # 无法获得 canvas，放弃处理触摸
-                    return
+        nonlocal touch_active, touch_id
+        t = e.changedTouches[0]
+        touch_active = True
+        touch_id = t.identifier
+        rect = canvas.getBoundingClientRect()
+        px = t.clientX - rect.left
+        py = t.clientY - rect.top
+        player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
+        player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+        player.shoot()
+    def on_touchmove(e):
+        nonlocal touch_active
+        if not touch_active: return
+        t = None
+        for touch in e.changedTouches:
+            if touch.identifier == touch_id:
+                t = touch
+                break
+        if t:
+            e.preventDefault()
             rect = canvas.getBoundingClientRect()
             px = t.clientX - rect.left
             py = t.clientY - rect.top
-            touch_active = True
-            touch_id = t.identifier
             player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
             player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
-            player.shoot()
-
-    def on_touchmove(e):
-        global touch_active
-        e.preventDefault()
-        if not touch_active:
-            return
-        # Ensure canvas available
-        global canvas, ctx
-        if canvas is None:
-            canvas, ctx = ensure_canvas_and_ctx()
-            if canvas is None:
-                return
-        for i in range(e.touches.length):
-            t = e.touches.item(i)
-            if touch_id is None or t.identifier == touch_id:
-                rect = canvas.getBoundingClientRect()
-                px = t.clientX - rect.left
-                py = t.clientY - rect.top
-                player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
-                player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
-                break
-
     def on_touchend(e):
-        global touch_active, touch_id
-        e.preventDefault()
+        nonlocal touch_active
         touch_active = False
         touch_id = None
 
@@ -475,24 +461,18 @@ def setup_controls():
 
 setup_controls()
 
-def spawn_enemy():
-    kind = "small" if Math.random()<0.7 else "big"
-    enemies.append(Enemy(kind))
+player = Player()
+enemies = []
+bullets = []
+powers = []
+effects = []
+boss = None
+score = 0
+frame = 0
+shake = 0
+spawn_boss_at = 500  # score threshold
 
-def spawn_power(x, y):
-    r = Math.random()
-    kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
-    powers.append(PowerUp(kind, x, y))
-
-def maybe_spawn_boss():
-    global boss
-    if boss is None and score>=spawn_boss_at:
-        boss = Boss()
-
-def update_hud():
-    score_el.innerText = f"分数：{int(score)}"
-    lives_el.innerText = f"生命：{player.hp}"
-    level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}"
+keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
 
 def draw_bg():
     # simple gradient
@@ -629,7 +609,7 @@ def update():
     score += 0.03  # time bonus
     update_hud()
 
-    if player.hp<=0:
+    if player.hp <= 0:
         end_game()
         return
 
@@ -657,6 +637,7 @@ def on_start(evt):
     document.body.classList.add("playing")
     reset_game()
     state = "playing"
+    window.requestAnimationFrame(_raf_proxy)
 
 start_btn.addEventListener("click", create_proxy(on_start))
 
