@@ -2,19 +2,84 @@ from js import document, window, console, Math
 from pyodide.ffi import create_proxy
 from utils import rects_collide, clamp, randf, load_sprite
 
-canvas = document.getElementById("game-canvas")
-ctx = canvas.getContext("2d")
+# Lazily ensure canvas exists and return (canvas, ctx)
+def ensure_canvas_and_ctx():
+    canvas = document.getElementById("game-canvas")
+    if canvas is None:
+        # 如果缺失，尝试把 canvas 插入到 #game-container 中，若没有 container 再插到 body
+        container = document.getElementById("game-container")
+        if container is None:
+            container = document.body
+            console.warn("ensure_canvas_and_ctx: #game-container missing, appending canvas to <body>.")
+        canvas = document.createElement("canvas")
+        canvas.id = "game-canvas"
+        canvas.style.display = "block"
+        container.appendChild(canvas)
+        console.warn("ensure_canvas_and_ctx: created missing #game-canvas element.")
+    try:
+        ctx = canvas.getContext("2d")
+    except Exception as e:
+        console.warn("ensure_canvas_and_ctx: getContext failed: " + str(e))
+        ctx = None
+    return canvas, ctx
 
-# Fit canvas to viewport
+# initialize global references (may create canvas if missing)
+canvas, ctx = ensure_canvas_and_ctx()
+
 def fit_canvas():
-    rect = document.getElementById("game-container").getBoundingClientRect()
-    w = int(rect.width)
-    h = int(rect.height)
-    canvas.width = w
-    canvas.height = h
+    """
+    Fit canvas to #game-container if present; otherwise fall back to viewport size.
+    Safe: will not call getBoundingClientRect on None.
+    """
+    container = document.getElementById("game-container")
+    if container is not None:
+        try:
+            rect = container.getBoundingClientRect()
+            w = int(rect.width)
+            h = int(rect.height)
+        except Exception as e:
+            console.warn("fit_canvas: getBoundingClientRect failed: " + str(e))
+            w = int(window.innerWidth)
+            h = int(window.innerHeight)
+    else:
+        w = int(window.innerWidth)
+        h = int(window.innerHeight)
 
+    global canvas, ctx
+    if canvas is None:
+        canvas, ctx = ensure_canvas_and_ctx()
+
+    try:
+        canvas.width = w
+        canvas.height = h
+    except Exception as e:
+        console.warn("fit_canvas: failed to set canvas size: " + str(e))
+
+    # Keep CSS size consistent so getBoundingClientRect works predictably
+    try:
+        canvas.style.width = f"{w}px"
+        canvas.style.height = f"{h}px"
+    except Exception:
+        pass
+
+    # device pixel ratio scaling (best-effort)
+    try:
+        dpr = window.devicePixelRatio or 1
+    except Exception:
+        dpr = 1
+    if ctx:
+        try:
+            ctx.setTransform(1,0,0,1,0,0)
+            ctx.scale(dpr, dpr)
+        except Exception:
+            # 某些环境上重复 scale 可能出错，忽略
+            pass
+
+# Run initial fit and register resize + DOMContentLoaded hooks
 fit_canvas()
 window.addEventListener("resize", create_proxy(lambda e: fit_canvas()))
+# If main.py loaded before DOM ready, also run fit when DOM becomes ready
+document.addEventListener("DOMContentLoaded", create_proxy(lambda e: fit_canvas()), {"once": True})
 
 # HUD elements
 hud = document.getElementById("hud")
@@ -356,31 +421,45 @@ def setup_controls():
     def on_touchstart(e):
         global touch_active, touch_id
         e.preventDefault()
-        if e.touches.length>0:
+        if e.touches.length > 0:
             t = e.touches.item(0)
+            # 确保 canvas 存在（如果不存在尝试重新创建/获取）
+            global canvas, ctx
+            if canvas is None:
+                canvas, ctx = ensure_canvas_and_ctx()
+                if canvas is None:
+                    # 无法获得 canvas，放弃处理触摸
+                    return
             rect = canvas.getBoundingClientRect()
             px = t.clientX - rect.left
             py = t.clientY - rect.top
             touch_active = True
             touch_id = t.identifier
-            # Center player to touch
             player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
             player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
-            # tap to shoot
             player.shoot()
+
     def on_touchmove(e):
         global touch_active
         e.preventDefault()
-        if not touch_active: return
+        if not touch_active:
+            return
+        # Ensure canvas available
+        global canvas, ctx
+        if canvas is None:
+            canvas, ctx = ensure_canvas_and_ctx()
+            if canvas is None:
+                return
         for i in range(e.touches.length):
             t = e.touches.item(i)
-            if touch_id is None or t.identifier==touch_id:
+            if touch_id is None or t.identifier == touch_id:
                 rect = canvas.getBoundingClientRect()
                 px = t.clientX - rect.left
                 py = t.clientY - rect.top
                 player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
                 player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
                 break
+
     def on_touchend(e):
         global touch_active, touch_id
         e.preventDefault()
