@@ -1,333 +1,594 @@
-from js import document, window
-import math
-import random
-from utils import rects_collide, clamp
+# -*- coding: utf-8 -*-
+# Enhanced StormPlane (Repack) with start menu, touch controls, enemy bullets,
+# multiple weapons, boss, power-ups, basic effects, and difficulty levels.
+from js import document, window, console, Math
 from pyodide.ffi import create_proxy
+from utils import rects_collide, clamp, randf, load_sprite
 
-# ===== Canvas =====
 canvas = document.getElementById("game-canvas")
 ctx = canvas.getContext("2d")
 
-def resize_canvas():
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+# Fit canvas to viewport
+def fit_canvas():
+    rect = document.getElementById("game-container").getBoundingClientRect()
+    w = int(rect.width)
+    h = int(rect.height)
+    canvas.width = w
+    canvas.height = h
 
-resize_canvas()
-_resize_proxy = create_proxy(lambda e: resize_canvas())
-window.addEventListener("resize", _resize_proxy)
+fit_canvas()
+window.addEventListener("resize", create_proxy(lambda e: fit_canvas()))
 
-# ===== 使用原仓库文件名（保持后缀一致） =====
-IMAGES = {
-    "player": "red_plane.png",             # 玩家飞机（/img/red_plane.png）
-    "bullet": "red_bullet.png",            # 我方子弹（/img/red_bullet.png）
-    "enemy_small": "small_enemy.png",      # 小型敌机（/img/small_enemy.png）
-    "enemy_middle": "middle_enemy.png",    # 中型敌机（/img/middle_enemy.png）
-    "enemy_big": "big_enemy.png",          # 大型敌机（/img/big_enemy.png）
-    "explosion": "boom.png",               # 爆炸效果（/img/boom.png，来自 res/drawable-mdpi/boom.png）
-    "bg1": "bg_01.jpg",                    # 背景1（/img/bg_01.jpg，来自 res/drawable-mdpi/bg_01.jpg）
-    "bg2": "bg_02.jpg",                    # 背景2（/img/bg_02.jpg，来自 res/drawable-mdpi/bg_02.jpg）
+# HUD elements
+hud = document.getElementById("hud")
+score_el = document.getElementById("score")
+lives_el = document.getElementById("lives")
+level_el = document.getElementById("level")
+
+# Menu elements
+menu = document.getElementById("menu")
+start_btn = document.getElementById("start-btn")
+diff_buttons = menu.querySelectorAll(".btns button")
+selected_diff = "normal"
+for i in range(diff_buttons.length):
+    b = diff_buttons.item(i)
+    def make_handler(btn):
+        def on_click(evt):
+            global selected_diff
+            for j in range(diff_buttons.length):
+                diff_buttons.item(j).classList.remove("active")
+            btn.classList.add("active")
+            selected_diff = btn.getAttribute("data-diff")
+        return on_click
+    b.addEventListener("click", create_proxy(make_handler(b)))
+diff_buttons.item(1).classList.add("active")  # normal default
+
+game_over = False
+state = "menu"  # 'menu' -> 'playing' -> 'gameover'
+
+# Difficulty settings
+DIFF = {
+    "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200},
+    "normal": {"enemy_rate": 0.022, "enemy_speed": (1.8,2.8), "bullet_rate": 0.008, "boss_hp": 1800},
+    "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
 }
 
-SOUNDS = {
-    "shoot": "shoot.mp3",                  # 射击音效（/sound/shoot.mp3）
-    "explosion_small": "explosion2.wav",   # 小型爆炸（/sound/explosion2.wav）
-    "explosion_big": "bigexplosion.wav",   # 大型爆炸（/sound/bigexplosion.wav）
-    "gameover": "explosion3.wav",          # 游戏结束（/sound/explosion3.wav）
-    "get_goods": "get_goods.wav",          # 获得道具（/sound/get_goods.wav）
-    "bgm": "game.mp3",                     # 背景音乐（/sound/game.mp3）
+IMG_BASE = "./img"
+SND_BASE = "./sound"
+
+# 首选命名
+SPRITES = {
+    "player_blue":  f"{IMG_BASE}/blue_plane.png",
+    "player_red":   f"{IMG_BASE}/red_plane.png",
+    "player_purple":f"{IMG_BASE}/purple_plane.png",
+    "enemy_small":  f"{IMG_BASE}/small_enemy.png",
+    "enemy_big":    f"{IMG_BASE}/big_enemy.png",
+    "boss":         f"{IMG_BASE}/boss_enemy.png",
+    "bullet_red":   f"{IMG_BASE}/red_bullet.png",
+    "bullet_blue":  f"{IMG_BASE}/blue_bullet.png",
+    "enemy_bullet": f"{IMG_BASE}/big_enemy_bullet.png",
+    "explosion":    f"{IMG_BASE}/boom.png",
+    "power_weapon": f"{IMG_BASE}/bullet_goods1.png",   # 武器升级
+    "power_shield": f"{IMG_BASE}/plane_shield.png",    # 护盾
+    "power_heal":   f"{IMG_BASE}/life_goods.png",      # 回血
 }
 
-# ===== 资源加载 =====
-def load_image(filename):
-    img = window.Image.new()
-    img.src = f"img/{filename}"
+# 将路径转成 Image 对象；若主名不存在则用已知别名兜底
+from js import Image
+def _to_img(path):
+    img = Image.new()
+    img.src = path
     return img
 
-def load_sound(filename, loop=False, volume=1.0):
-    audio = window.Audio.new(f"sound/{filename}")
-    audio.loop = loop
-    audio.volume = volume
-    return audio
+for k, p in list(SPRITES.items()):
+    try:
+        SPRITES[k] = _to_img(p)
+    except Exception:
+        SPRITES[k] = None
 
-# 载入图片
-images = {k: load_image(v) for k, v in IMAGES.items()}
+def _fallback(key, *alts):
+    if SPRITES.get(key) is not None: 
+        return
+    for ap in alts:
+        try:
+            SPRITES[key] = _to_img(ap)
+            return
+        except Exception:
+            continue
+    SPRITES[key] = None
 
-# 载入音效
-sounds = {
-    "shoot": load_sound(SOUNDS["shoot"], loop=False, volume=0.45),
-    "explosion_small": load_sound(SOUNDS["explosion_small"], loop=False, volume=0.6),
-    "explosion_big": load_sound(SOUNDS["explosion_big"], loop=False, volume=0.6),
-    "gameover": load_sound(SOUNDS["gameover"], loop=False, volume=0.7),
-    "get_goods": load_sound(SOUNDS["get_goods"], loop=False, volume=0.5),
-    "bgm": load_sound(SOUNDS["bgm"], loop=True, volume=0.35),
+_fallback("enemy_small", f"{IMG_BASE}/small.png")
+_fallback("enemy_big",   f"{IMG_BASE}/big.png")
+_fallback("boss",        f"{IMG_BASE}/boosplane.png")
+_fallback("enemy_bullet",f"{IMG_BASE}/bigplane_bullet.png")
+_fallback("explosion",   f"{IMG_BASE}/myplaneexplosion.png")
+# 备选的武器道具图（存在就换）
+_fallback("power_weapon", f"{IMG_BASE}/bullet_goods2.png", f"{IMG_BASE}/purple_bullet_goods.png", f"{IMG_BASE}/red_bullet_goods.png")
+
+SOUNDS = {
+    "shoot":  f"{SND_BASE}/shoot.mp3",
+    "boom":   f"{SND_BASE}/explosion.mp3",
+    "boom2":  f"{SND_BASE}/explosion2.wav",
+    "pickup": f"{SND_BASE}/get_goods.wav",
+    "button": f"{SND_BASE}/button.wav",
+    "bgm":    f"{SND_BASE}/game.mp3",
 }
 
-# 背景自动播放需要一次用户交互解锁音频策略（移动端）
-_audio_unlocked = {"value": False}
-def _unlock_audio(_evt=None):
-    if not _audio_unlocked["value"]:
-        try:
-            sounds["bgm"].play()
-        except Exception as _e:
-            pass
-        _audio_unlocked["value"] = True
-        document.removeEventListener("touchstart", _unlock_touch_proxy)
-        document.removeEventListener("mousedown", _unlock_mouse_proxy)
-        document.removeEventListener("keydown", _unlock_key_proxy)
-        try:
-            _unlock_touch_proxy.destroy(); _unlock_mouse_proxy.destroy(); _unlock_key_proxy.destroy()
-        except Exception as _:
-            pass
+def play_sound(key, vol=0.7):
+    try:
+        from js import Audio
+        if key in SOUNDS and SOUNDS[key]:
+            a = Audio.new(SOUNDS[key])
+            a.volume = vol
+            a.play()
+    except Exception:
+        pass
 
-_unlock_touch_proxy = create_proxy(_unlock_audio)
-_unlock_mouse_proxy = create_proxy(_unlock_audio)
-_unlock_key_proxy = create_proxy(_unlock_audio)
-document.addEventListener("touchstart", _unlock_touch_proxy)
-document.addEventListener("mousedown", _unlock_mouse_proxy)
-document.addEventListener("keydown", _unlock_key_proxy)
-
-# ===== 背景滚动 =====
-bg_scroll_y = 0
-def draw_background():
-    global bg_scroll_y
-    h = canvas.height
-    w = canvas.width
-    speed = 1.5
-
-    bg1 = images["bg1"]
-    bg2 = images["bg2"]
-    # 拉伸铺满
-    ctx.drawImage(bg1, 0, bg_scroll_y - h, w, h)
-    ctx.drawImage(bg2, 0, bg_scroll_y, w, h)
-    bg_scroll_y += speed
-    if bg_scroll_y >= h:
-        bg_scroll_y = 0
-
-# ===== 基础类 =====
-class Sprite:
-    def __init__(self, img, x, y, w, h, vx=0, vy=0):
-        self.img = img
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
-        self.vx = vx
-        self.vy = vy
-        self.alive = True
-
+# Entities
+class Player:
+    def __init__(self):
+        self.x = canvas.width/2 - 24
+        self.y = canvas.height - 120
+        self.w = 48
+        self.h = 48
+        self.speed = 4
+        self.hp = 100
+        self.sprite_key = "player_blue"
+        self.weapon = "single"  # single | twin | spread
+        self.shoot_cd = 0
+        self.shield = 0  # frames
     def draw(self):
-        ctx.drawImage(self.img, self.x, self.y, self.w, self.h)
+        img = SPRITES.get(self.sprite_key)
+        if img:
+            ctx.drawImage(img, self.x, self.y, self.w, self.h)
+        else:
+            ctx.fillStyle = "#2b7"
+            ctx.fillRect(self.x, self.y, self.w, self.h)
+        if self.shield > 0:
+            ctx.strokeStyle = "rgba(0,200,255,0.8)"
+            ctx.lineWidth = 3
+            ctx.beginPath()
+            ctx.arc(self.x+self.w/2, self.y+self.h/2, self.w*0.7, 0, Math.PI*2)
+            ctx.stroke()
+    def shoot(self):
+        if self.shoot_cd > 0: return
+        self.shoot_cd = 10
+        play_sound("shoot", 0.25)
+        if self.weapon == "single":
+            bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
+        elif self.weapon == "twin":
+            bullets.append(Bullet(self.x+6, self.y-10, 0, -8, "player"))
+            bullets.append(Bullet(self.x+self.w-12, self.y-10, 0, -8, "player"))
+        elif self.weapon == "spread":
+            for dx,dy in [(-2,-8),(0,-9),(2,-8)]:
+                bullets.append(Bullet(self.x+self.w/2-3, self.y-10, dx, dy, "player"))
+    def hit(self, dmg):
+        if self.shield>0:
+            self.shield = max(0, self.shield - int(dmg*20))
+            return
+        self.hp -= dmg
 
+class Enemy:
+    def __init__(self, kind="small"):
+        self.kind = kind
+        self.w = 36 if kind=="small" else 64
+        self.h = 36 if kind=="small" else 64
+        self.x = randf(0, canvas.width-self.w)
+        self.y = -self.h - randf(0, 100)
+        spd_min, spd_max = DIFF[selected_diff]["enemy_speed"]
+        self.vx = randf(-0.6, 0.6)
+        self.vy = randf(spd_min, spd_max)
+        self.hp = 15 if kind=="small" else 40
+        self.cd = 40  # shoot cooldown
+    def draw(self):
+        key = "enemy_small" if self.kind=="small" else "enemy_big"
+        img = SPRITES.get(key)
+        if img:
+            ctx.drawImage(img, self.x, self.y, self.w, self.h)
+        else:
+            ctx.fillStyle = "#a33" if self.kind=="small" else "#833"
+            ctx.fillRect(self.x, self.y, self.w, self.h)
     def update(self):
         self.x += self.vx
         self.y += self.vy
-        if self.y > canvas.height + 100 or self.y < -200 or self.x < -200 or self.x > canvas.width + 200:
-            self.alive = False
+        self.x = clamp(self.x, 0, canvas.width-self.w)
+        # Shoot
+        self.cd -= 1
+        if self.cd<=0:
+            self.cd = int(90 - 30*randf(0,1))
+            if Math.random() < DIFF[selected_diff]["bullet_rate"]:
+                # fire at player
+                tx = player.x + player.w/2
+                ty = player.y + player.h/2
+                cx = self.x + self.w/2
+                cy = self.y + self.h
+                vx = tx - cx
+                vy = ty - cy
+                mag = (vx*vx+vy*vy) ** 0.5 + 1e-5
+                vx, vy = vx/mag*3.0, vy/mag*3.0
+                bullets.append(Bullet(cx-3, cy, vx, vy, "enemy"))
 
-class Player(Sprite):
+class Boss:
     def __init__(self):
-        size = max(48, min(canvas.width, canvas.height) * 0.08)
-        super().__init__(images["player"], canvas.width/2 - size/2, canvas.height - size*1.5, size, size)
-        self.cooldown = 0
-        self.speed = max(4, size * 0.12)
-
-    def shoot(self):
-        if self.cooldown <= 0:
-            b_w = max(10, self.w * 0.18)
-            b_h = b_w * 1.8
-            bx = self.x + self.w/2 - b_w/2
-            by = self.y - b_h + 4
-            bullets.append(Sprite(images["bullet"], bx, by, b_w, b_h, vy=-9))
-            try:
-                sounds["shoot"].currentTime = 0
-                sounds["shoot"].play()
-            except Exception:
-                pass
-            self.cooldown = 10  # 自动射击间隔帧
-
-    def handle_input(self):
-        dx = (keys["ArrowRight"] - keys["ArrowLeft"]) * self.speed
-        dy = (keys["ArrowDown"] - keys["ArrowUp"]) * self.speed
-        self.x += dx
-        self.y += dy
-        self.x = clamp(self.x, 0, canvas.width - self.w)
-        self.y = clamp(self.y, 0, canvas.height - self.h)
-
-    def update(self):
-        if self.cooldown > 0:
-            self.cooldown -= 1
-        self.shoot()
-        self.draw()
-
-class Enemy(Sprite):
-    def __init__(self, kind, x, y, speed):
-        if kind == "small":
-            img = images["enemy_small"]
-            base = 42
-            score = 5
-            hp = 1
-        elif kind == "middle":
-            img = images["enemy_middle"]
-            base = 64
-            score = 10
-            hp = 3
+        self.w = 160
+        self.h = 110
+        self.x = canvas.width/2 - self.w/2
+        self.y = -self.h
+        self.vy = 1.2
+        self.hp = DIFF[selected_diff]["boss_hp"]
+        self.phase = 0
+        self.cd = 120
+    def draw(self):
+        img = SPRITES.get("boss")
+        if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
         else:
-            img = images["enemy_big"]
-            base = 92
-            score = 30
-            hp = 8
-        size = max(base, min(canvas.width, canvas.height) * (base/480))
-        super().__init__(img, x, y, size, size, vy=speed)
-        self.kind = kind
-        self.hp = hp
-        self.score = score
+            ctx.fillStyle = "#5522aa"
+            ctx.fillRect(self.x, self.y, self.w, self.h)
+        # HP bar
+        ctx.fillStyle = "rgba(0,0,0,0.5)"
+        ctx.fillRect(20, 20, canvas.width-40, 12)
+        ctx.fillStyle = "#e33"
+        ratio = max(0, self.hp)/DIFF[selected_diff]["boss_hp"]
+        ctx.fillRect(20, 20, (canvas.width-40)*ratio, 12)
+    def update(self):
+        if self.y < 40:
+            self.y += self.vy
+        self.cd -= 1
+        if self.cd<=0:
+            self.cd = 80
+            self.phase = (self.phase+1) % 3
+            self.fire_pattern(self.phase)
+    def fire_pattern(self, p):
+        cx = self.x + self.w/2
+        cy = self.y + self.h
+        if p == 0:
+            # fan
+            for a in range(-40, 41, 10):
+                rad = (a/180.0)*Math.PI
+                vx, vy = 3*Math.sin(rad), 3*Math.cos(rad)
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy"))
+        elif p == 1:
+            # aimed bursts
+            tx, ty = player.x+player.w/2, player.y+player.h/2
+            for k in range(12):
+                ang = Math.atan2(ty-cy, tx-cx) + (k-6)*0.08
+                vx, vy = 3.2*Math.cos(ang), 3.2*Math.sin(ang)
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy"))
+        else:
+            # spiral
+            for k in range(24):
+                ang = k*0.26 + Math.random()*0.5
+                vx, vy = 2.6*Math.cos(ang), 2.6*Math.sin(ang)+0.8
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy"))
 
-# ===== 游戏集合 =====
+class Bullet:
+    def __init__(self, x, y, vx, vy, owner):
+        self.x, self.y, self.vx, self.vy = x, y, vx, vy
+        self.w, self.h = 6, 12
+        self.owner = owner  # 'player' or 'enemy'
+    def draw(self):
+        if self.owner=="player":
+            img = SPRITES.get("bullet_blue" if player.weapon!="single" else "bullet_red")
+            if img:
+                ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            else:
+                ctx.fillStyle = "#0bf" if player.weapon!="single" else "#f33"
+                ctx.fillRect(self.x, self.y, self.w, self.h)
+        else:
+            img = SPRITES.get("enemy_bullet")
+            if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            else:
+                ctx.fillStyle = "#f90"
+                ctx.fillRect(self.x, self.y, self.w, self.h)
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+
+class PowerUp:
+    def __init__(self, kind, x, y):
+        self.kind = kind  # weapon | shield | heal
+        self.x, self.y = x, y
+        self.w, self.h = 28, 28
+        self.vy = 2.0
+    def draw(self):
+        key = "power_"+self.kind
+        img = SPRITES.get(key)
+        if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
+        else:
+            ctx.fillStyle = {"weapon":"#0bf","shield":"#0cf","heal":"#0b5"}[self.kind]
+            ctx.fillRect(self.x, self.y, self.w, self.h)
+    def update(self):
+        self.y += self.vy
+
+class Explosion:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.t = 24
+    def draw(self):
+        img = SPRITES.get("explosion")
+        if img:
+            ctx.drawImage(img, self.x-20, self.y-20, 40, 40)
+        else:
+            ctx.fillStyle = f"rgba(255,150,0,{self.t/24})"
+            ctx.beginPath()
+            ctx.arc(self.x, self.y, (24-self.t)+10, 0, Math.PI*2)
+            ctx.fill()
+    def update(self):
+        self.t -= 1
+
 player = Player()
-bullets = []
 enemies = []
+bullets = []
+powers = []
+effects = []
+boss = None
 score = 0
-game_over = False
-spawn_timer = 0
+frame = 0
+shake = 0
+spawn_boss_at = 500  # score threshold
 
-# ===== 键鼠与触摸 =====
-keys = {"ArrowLeft":0, "ArrowRight":0, "ArrowUp":0, "ArrowDown":0}
+keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
 
-def on_key_down(e):
-    if e.key in keys:
-        keys[e.key] = 1
-def on_key_up(e):
-    if e.key in keys:
-        keys[e.key] = 0
+def reset_game():
+    global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake
+    player = Player()
+    enemies.clear(); bullets.clear(); powers.clear(); effects.clear()
+    boss = None
+    score = 0
+    frame = 0
+    shake = 0
+    game_over = False
 
-_keydown_proxy = create_proxy(on_key_down)
-_keyup_proxy = create_proxy(on_key_up)
-document.addEventListener("keydown", _keydown_proxy)
-document.addEventListener("keyup", _keyup_proxy)
+# Touch controls: drag to move, tap to shoot
+touch_active = False
+touch_id = None
+def setup_controls():
+    def keydown(e):
+        k = e.key
+        if k in keys: keys[k]=True
+        if k==" " or k=="Spacebar": keys["Space"]=True
+    def keyup(e):
+        k = e.key
+        if k in keys: keys[k]=False
+        if k==" " or k=="Spacebar": keys["Space"]=False
 
-# 触摸拖动
-_touch = {"x": None, "y": None}
-def on_touch_start(e):
-    t = e.touches[0]
-    _touch["x"] = t.clientX
-    _touch["y"] = t.clientY
-def on_touch_move(e):
-    t = e.touches[0]
-    dx = t.clientX - _touch["x"]
-    dy = t.clientY - _touch["y"]
-    player.x += dx
-    player.y += dy
-    player.x = clamp(player.x, 0, canvas.width - player.w)
-    player.y = clamp(player.y, 0, canvas.height - player.h)
-    _touch["x"] = t.clientX
-    _touch["y"] = t.clientY
-def on_touch_end(e):
-    _touch["x"] = None
-    _touch["y"] = None
+    window.addEventListener("keydown", create_proxy(keydown))
+    window.addEventListener("keyup", create_proxy(keyup))
 
-_touchstart_proxy = create_proxy(on_touch_start)
-_touchmove_proxy = create_proxy(on_touch_move)
-_touchend_proxy = create_proxy(on_touch_end)
-canvas.addEventListener("touchstart", _touchstart_proxy)
-canvas.addEventListener("touchmove", _touchmove_proxy)
-canvas.addEventListener("touchend", _touchend_proxy)
-
-# ===== 生成敌机 =====
-def spawn_enemy():
-    global spawn_timer
-    spawn_timer += 1
-    if spawn_timer < 15:
-        return
-    spawn_timer = 0
-    r = random.random()
-    if r < 0.65:
-        kind = "small"
-        speed = random.uniform(2.5, 4.5)
-    elif r < 0.9:
-        kind = "middle"
-        speed = random.uniform(2.0, 3.2)
-    else:
-        kind = "big"
-        speed = random.uniform(1.4, 2.1)
-
-    size_hint = 60 if kind=="small" else (84 if kind=="middle" else 120)
-    x = random.uniform(0, canvas.width - size_hint)
-    enemies.append(Enemy(kind, x, -size_hint, speed))
-
-# ===== 碰撞 & 结算 =====
-def handle_collisions():
-    global score, game_over
-    # 子弹命中敌机
-    for b in bullets[:]:
-        for e in enemies[:]:
-            if rects_collide(b, e):
-                bullets.remove(b)
-                e.hp -= 1
-                if e.hp <= 0:
-                    enemies.remove(e)
-                    score += e.score
-                    try:
-                        if e.kind == "big":
-                            sounds["explosion_big"].currentTime = 0
-                            sounds["explosion_big"].play()
-                        else:
-                            sounds["explosion_small"].currentTime = 0
-                            sounds["explosion_small"].play()
-                    except Exception:
-                        pass
+    # Touch handlers on canvas
+    def on_touchstart(e):
+        global touch_active, touch_id
+        e.preventDefault()
+        if e.touches.length>0:
+            t = e.touches.item(0)
+            rect = canvas.getBoundingClientRect()
+            px = t.clientX - rect.left
+            py = t.clientY - rect.top
+            touch_active = True
+            touch_id = t.identifier
+            # Center player to touch
+            player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
+            player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+            # tap to shoot
+            player.shoot()
+    def on_touchmove(e):
+        global touch_active
+        e.preventDefault()
+        if not touch_active: return
+        for i in range(e.touches.length):
+            t = e.touches.item(i)
+            if touch_id is None or t.identifier==touch_id:
+                rect = canvas.getBoundingClientRect()
+                px = t.clientX - rect.left
+                py = t.clientY - rect.top
+                player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
+                player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
                 break
-    # 敌机撞玩家
-    for e in enemies[:]:
-        if rects_collide(e, player):
-            game_over = True
-            try:
-                sounds["gameover"].play()
-            except Exception:
-                pass
-            break
+    def on_touchend(e):
+        global touch_active, touch_id
+        e.preventDefault()
+        touch_active = False
+        touch_id = None
 
-# ===== 主循环 =====
+    canvas.addEventListener("touchstart", create_proxy(on_touchstart), {"passive":False})
+    canvas.addEventListener("touchmove", create_proxy(on_touchmove), {"passive":False})
+    canvas.addEventListener("touchend", create_proxy(on_touchend), {"passive":False})
+    canvas.addEventListener("touchcancel", create_proxy(on_touchend), {"passive":False})
+
+setup_controls()
+
+def spawn_enemy():
+    kind = "small" if Math.random()<0.7 else "big"
+    enemies.append(Enemy(kind))
+
+def spawn_power(x, y):
+    r = Math.random()
+    kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
+    powers.append(PowerUp(kind, x, y))
+
+def maybe_spawn_boss():
+    global boss
+    if boss is None and score>=spawn_boss_at:
+        boss = Boss()
+
+def update_hud():
+    score_el.innerText = f"Score: {int(score)}"
+    lives_el.innerText = f" HP: {player.hp}"
+    level_el.innerText = f" 难度: {selected_diff}"
+
+def draw_bg():
+    # simple gradient
+    g = ctx.createLinearGradient(0,0,0,canvas.height)
+    g.addColorStop(0, "#f0f4ff")
+    g.addColorStop(1, "#c9e6ff")
+    ctx.fillStyle = g
+    ctx.fillRect(0,0,canvas.width,canvas.height)
+
 def update():
-    global game_over
-    # 背景
-    draw_background()
+    global frame, score, game_over, shake
+    if state == "menu":
+        window.requestAnimationFrame(_raf_proxy)
+        return
 
-    # 玩家
-    player.handle_input()
-    player.update()
+    # Background
+    draw_bg()
 
-    # 子弹
-    for b in bullets[:]:
-        b.update()
-        b.draw()
-        if not b.alive:
-            bullets.remove(b)
+    # Player move by keys
+    dx = (keys["ArrowRight"]-keys["ArrowLeft"])*player.speed
+    dy = (keys["ArrowDown"]-keys["ArrowUp"])*player.speed
+    player.x = clamp(player.x+dx, 0, canvas.width-player.w)
+    player.y = clamp(player.y+dy, 0, canvas.height-player.h)
 
-    # 敌机
+    # Shooting
+    if keys["Space"]: player.shoot()
+    if player.shoot_cd>0: player.shoot_cd -= 1
+    if player.shield>0: player.shield -= 1
+
+    # Enemies
+    if Math.random() < DIFF[selected_diff]["enemy_rate"]:
+        spawn_enemy()
+
     for e in enemies[:]:
         e.update()
         e.draw()
-        if not e.alive:
+        if e.y > canvas.height+40:
             enemies.remove(e)
 
-    # 逻辑
-    handle_collisions()
-    spawn_enemy()
+    # Boss
+    maybe_spawn_boss()
+    if boss:
+        boss.update()
+        boss.draw()
 
-    # HUD
+    # Bullets
+    for b in bullets[:]:
+        b.update()
+        b.draw()
+        if b.y<-40 or b.y>canvas.height+40 or b.x<-40 or b.x>canvas.width+40:
+            bullets.remove(b)
+
+    # Powers
+    for p in powers[:]:
+        p.update()
+        p.draw()
+        if p.y > canvas.height+40:
+            powers.remove(p)
+
+    # Collisions
+    for b in [bb for bb in bullets if bb.owner=="player"]:
+        for e in enemies[:]:
+            if rects_collide(b, e):
+                effects.append(Explosion(b.x, b.y))
+                play_sound("boom", 0.25)
+                bullets.remove(b); e.hp -= 20
+                if e.hp<=0:
+                    score += 10 if e.kind=="small" else 25
+                    if Math.random()<0.25: spawn_power(e.x+e.w/2, e.y+e.h/2)
+                    enemies.remove(e)
+                break
+        if boss and rects_collide(b, boss):
+            effects.append(Explosion(b.x, b.y))
+            play_sound("boom2", 0.25)
+            bullets.remove(b); boss.hp -= 12
+            score += 2
+            if boss.hp<=0:
+                score += 300
+                effects.append(Explosion(boss.x+boss.w/2, boss.y+boss.h/2))
+                boss = None
+
+    # Enemy bullets vs player
+    for b in [bb for bb in bullets if bb.owner=="enemy"]:
+        if rects_collide(b, player):
+            effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
+            play_sound("boom", 0.25)
+            try: bullets.remove(b)
+            except: pass
+            player.hit(15)
+            shake = 8
+
+    # Enemy body vs player
+    for e in enemies[:]:
+        if rects_collide(e, player):
+            effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
+            play_sound("boom", 0.25)
+            enemies.remove(e)
+            player.hit(25)
+            shake = 10
+
+    # Power pickup
+    for p in powers[:]:
+        if rects_collide(p, player):
+            play_sound("pickup", 0.35)
+            if p.kind=="weapon":
+                if player.weapon=="single":
+                    player.weapon="twin"; player.sprite_key="player_red"
+                elif player.weapon=="twin":
+                    player.weapon="spread"; player.sprite_key="player_purple"
+                else:
+                    player.weapon="spread"
+            elif p.kind=="shield":
+                player.shield = 300
+            else:
+                player.hp = min(100, player.hp+30)
+            powers.remove(p)
+
+    # Draw player last
+    player.draw()
+
+    # Effects
+    for fx in effects[:]:
+        fx.update(); fx.draw()
+        if fx.t<=0: effects.remove(fx)
+
+    # Shake (装饰)
+    if shake>0:
+        shake -= 1
+        ctx.save()
+        ctx.translate(randf(-2,2), randf(-2,2))
+        ctx.restore()
+
+    frame += 1
+    score += 0.03  # time bonus
+    update_hud()
+
+    if player.hp<=0:
+        end_game()
+        return
+
+    window.requestAnimationFrame(_raf_proxy)
+
+def end_game():
+    global state, game_over
+    state = "gameover"; game_over = True
+    # overlay
+    ctx.fillStyle = "rgba(0,0,0,0.45)"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = "red"
+    ctx.font = "42px Arial"
+    ctx.fillText("GAME OVER", canvas.width/2 - 120, canvas.height/2)
+    # show menu after short delay
+    def show_menu(*args):
+        menu.style.display = "flex"
+    window.setTimeout(create_proxy(show_menu), 900)
+
+# Hook start button
+def on_start(evt):
+    global state
+    play_sound("button", 0.4)
+    menu.style.display = "none"
+    reset_game()
+    state = "playing"
+
+start_btn.addEventListener("click", create_proxy(on_start))
+
+# Initial render (menu visible)
+def first_frame():
+    draw_bg()
+    ctx.fillStyle = "rgba(0,0,0,0.45)"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.fillStyle = "white"
-    ctx.font = "20px Arial"
-    ctx.fillText(f"Score: {score}", 12, 28)
+    ctx.font = "24px Arial"
+    ctx.fillText("点击“开始游戏”按钮进入", 20, canvas.height/2 + 40)
 
-    if not game_over:
-        window.requestAnimationFrame(_raf_proxy)
-    else:
-        ctx.fillStyle = "rgba(0,0,0,0.45)"
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        ctx.fillStyle = "red"
-        ctx.font = "42px Arial"
-        ctx.fillText("GAME OVER", canvas.width/2 - 120, canvas.height/2)
-
-# 启动
 _raf_proxy = create_proxy(lambda *_: update())
-update()
+first_frame()
