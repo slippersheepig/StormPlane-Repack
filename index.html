@@ -1,50 +1,64 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>沙漠风暴 - Repack</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>沙漠风暴REPACK</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
 </head>
 <body>
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
-        <div id="loading">资源加载中...</div>
+    <canvas id="game-canvas"></canvas>
 
-        <div id="hud">
-            <span id="score">Score: 0</span>
-            <span id="lives"></span>
-            <span id="level"></span>
-        </div>
+    <div id="hud">
+        <div id="score">Score: 0</div>
+        <div id="lives">❤❤❤</div>
+    </div>
 
-        <div id="menu">
-          <div class="panel">
-            <h1>沙漠风暴</h1>
-            <p>请选择难度：</p>
-            <div class="btns">
-              <button data-diff="easy">新手</button>
-              <button data-diff="normal" class="active">普通</button>
-              <button data-diff="hard">噩梦</button>
+    <div id="menu">
+        <div class="panel">
+            <h1>Storm Plane</h1>
+            <div class="btn-row">
+                <button id="easy">简单</button>
+                <button id="normal">普通</button>
+                <button id="hard">困难</button>
             </div>
             <button id="start-btn">开始游戏</button>
-          </div>
+            <div id="menu-hint" class="menu-hint">点击“开始游戏”按钮进入</div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
     <script>
+        const canvas = document.getElementById("game-canvas");
+        const ctx = canvas.getContext("2d");
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+
         async function main() {
-            let pyodide = await loadPyodide();
+            const pyodide = await loadPyodide();
             await pyodide.loadPackage(["micropip"]);
             await pyodide.runPythonAsync(`
-import micropip
-await micropip.install([])
-`);
-            document.getElementById("loading").style.display = "none";
-            let utils_code = await (await fetch("utils.py")).text();
-            pyodide.FS.writeFile("utils.py", utils_code);
+                import micropip
+                await micropip.install([])
+            `);
+            await pyodide.runPythonAsync(await (await fetch("utils.py")).text());
             await pyodide.runPythonAsync(await (await fetch("main.py")).text());
+
+            try { document.getElementById("hud").style.display = "none"; } catch(e) {}
+
+            try {
+                const startBtn = document.getElementById("start-btn");
+                startBtn.addEventListener("click", function(){
+                    try {
+                        if (window.start_game) { window.start_game(); return; }
+                    } catch(e){}
+                    try { pyodide.runPythonAsync('on_start(None)'); } catch(e){ console.error(e); }
+                });
+            } catch(e) { console.error(e); }
         }
         main();
     </script>
