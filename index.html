@@ -48,7 +48,11 @@
   <script>
     async function main() {
       const pyodide = await loadPyodide();
-      pyodide.globals.set("window", window);
+      await pyodide.loadPackage(["micropip"]);
+      await pyodide.runPythonAsync(`
+        import micropip
+        await micropip.install([])
+      `);
       await pyodide.runPythonAsync(await (await fetch("utils.py")).text());
       await pyodide.runPythonAsync(await (await fetch("main.py")).text());
     }
