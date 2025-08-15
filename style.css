@@ -1,149 +1,97 @@
-/* ====== 通用样式 ====== */
+/* 背景与布局基础 */
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
-  background: #000;
-  color: #fff;
-  font-family: Arial, sans-serif;
-  overflow: hidden;
-}
-
-/* ====== HUD 样式 ====== */
-#hud {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 20px;
-  font-size: 18px;
-  z-index: 1000;
-}
-
-#hud div {
-  background: rgba(0,0,0,0.5);
-  padding: 5px 10px;
-  border-radius: 6px;
-}
-
-/* ====== 菜单样式 ====== */
-#menu {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.85);
+  overflow: hidden;
+  background: #000;
+  font-family: 'Segoe UI', sans-serif;
+  color: #fff;
+}
+
+canvas#bgCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+}
+
+/* HUD 初始隐藏 */
+#hud {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 20px;
+  gap: 20px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+  white-space: nowrap;
+}
+
+/* 游戏状态切换：进入游戏后才显示 HUD */
+body.playing #hud {
+  display: flex !important;
+}
+
+/* 菜单面板 */
+#menu {
+  position: fixed;
+  inset: 0;
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 2000;
+  justify-content: center;
 }
 
 #menu .panel {
-  background: rgba(20,20,20,0.95);
-  padding: 20px;
-  border-radius: 12px;
   text-align: center;
-  max-width: 90%;
-  box-shadow: 0 0 15px rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.6);
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 0 20px rgba(0, 200, 255, .5);
 }
 
-#menu .title-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+#menu .panel h1 {
+  margin-bottom: 30px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  font-size: 32px;
+  text-shadow: 0 0 10px rgba(0, 200, 255, .9), 0 0 24px rgba(58, 71, 213, .6);
 }
 
-#menu .hearts {
-  font-size: 24px;
-  color: red;
-  margin-bottom: 10px;
-}
-
-#menu h1 {
-  font-size: 28px;
-  margin: 0 0 20px 0;
-}
-
-.btn-row {
-  margin: 10px 0;
-}
-
-.difficulty {
-  margin: 0 10px;
-}
-
-.difficulty input {
-  display: none;
-}
-
-.difficulty span {
-  background: rgba(255,255,255,0.1);
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.difficulty input:checked + span {
-  background: rgba(0,200,0,0.5);
-}
-
+#menu .btns button,
 #start-btn {
-  background: #28a745;
-  border: none;
-  padding: 10px 20px;
-  font-size: 18px;
-  border-radius: 6px;
+  appearance: none;
+  background: linear-gradient(135deg, #00d2ff, #3a47d5);
+  color: #fff;
+  border: 0;
+  padding: 12px 22px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 9999px;
   cursor: pointer;
-  transition: background 0.3s;
+  box-shadow: 0 0 12px rgba(0,210,255,0.6), 0 0 24px rgba(58,71,213,0.4);
+  transition: transform .1s ease, box-shadow .2s ease, filter .2s ease;
+  margin: 8px;
 }
 
+#menu .btns button:hover,
 #start-btn:hover {
-  background: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(0,210,255,0.8), 0 0 32px rgba(58,71,213,0.6);
+  filter: brightness(1.1);
 }
 
-.menu-hint {
-  margin-top: 15px;
-  font-size: 14px;
-  opacity: 0.8;
+#menu .btns button:active,
+#start-btn:active {
+  transform: translateY(0);
 }
 
-/* ====== 响应式优化 ====== */
-@media (max-width: 600px) {
-  #menu h1 {
-    font-size: 22px;
-  }
-  .difficulty span {
-    padding: 6px 10px;
-    font-size: 14px;
-  }
-  #start-btn {
-    font-size: 16px;
-    padding: 8px 16px;
-  }
-}
-
-/* 确保容器与 canvas 充满视口并定位正确 */
-#game-container {
-  width: 100vw;
-  height: 100vh;
-  position: relative;
-  overflow: hidden;
-  touch-action: none; /* 防止触摸移动滚动页面 */
-}
-
-/* 让 canvas 填满容器 */
-#game-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: #111;
-}
-
-/* ====== 状态切换（进入游戏时显示 HUD） ====== */
-body.playing #hud {
-  display: flex !important;
+/* 难度按钮选中态 */
+#menu .btns button.active {
+  background: linear-gradient(135deg, #ff00cc, #333399);
+  box-shadow: 0 0 14px rgba(255,0,204,0.7), 0 0 28px rgba(51,51,153,0.5);
 }
