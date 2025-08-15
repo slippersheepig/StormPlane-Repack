@@ -424,7 +424,7 @@ def setup_controls():
         elif k == " " or k == "Enter": player.shoot()
     document.body.addEventListener("keydown", create_proxy(keydown))
     def on_touchstart(e):
-        nonlocal touch_active, touch_id
+        global touch_active, touch_id
         t = e.changedTouches[0]
         touch_active = True
         touch_id = t.identifier
@@ -435,7 +435,7 @@ def setup_controls():
         player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
         player.shoot()
     def on_touchmove(e):
-        nonlocal touch_active
+        global touch_active
         if not touch_active: return
         t = None
         for touch in e.changedTouches:
@@ -450,7 +450,7 @@ def setup_controls():
             player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
             player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
     def on_touchend(e):
-        nonlocal touch_active
+        global touch_active, touch_id
         touch_active = False
         touch_id = None
 
