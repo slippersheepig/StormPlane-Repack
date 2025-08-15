@@ -80,7 +80,6 @@ body.playing #hud {
 }
 
 /* 统一按钮风格（如果你已经有相关样式，这里会覆盖） */
-#menu .btns button,
 #start-btn {
   appearance: none;
   background: linear-gradient(135deg, #00d2ff, #3a47d5);
