@@ -115,6 +115,8 @@ DIFF = {
     "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
 }
 
+DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
+
 IMG_BASE = "./img"
 SND_BASE = "./sound"
 
@@ -488,9 +490,9 @@ def maybe_spawn_boss():
         boss = Boss()
 
 def update_hud():
-    score_el.innerText = f"Score: {int(score)}"
-    lives_el.innerText = f" HP: {player.hp}"
-    level_el.innerText = f" 难度: {selected_diff}"
+    score_el.innerText = f"分数：{int(score)}"
+    lives_el.innerText = f"生命：{player.hp}"
+    level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}"
 
 def draw_bg():
     # simple gradient
@@ -636,7 +638,7 @@ def update():
 def end_game():
     global state, game_over
     state = "gameover"; game_over = True
-    # overlay
+    document.body.classList.remove("playing")
     ctx.fillStyle = "rgba(0,0,0,0.45)"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.fillStyle = "red"
@@ -652,6 +654,7 @@ def on_start(evt):
     global state
     play_sound("button", 0.4)
     menu.style.display = "none"
+    document.body.classList.add("playing")
     reset_game()
     state = "playing"
 
