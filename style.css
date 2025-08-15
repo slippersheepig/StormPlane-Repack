@@ -27,13 +27,6 @@ html, body {
   border-radius: 6px;
 }
 
-/* ====== 游戏画布 ====== */
-#game-canvas {
-  display: block;
-  margin: 0 auto;
-  background: #222;
-}
-
 /* ====== 菜单样式 ====== */
 #menu {
   position: absolute;
