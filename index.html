@@ -8,7 +8,7 @@
 </head>
 <body>
   <div id="game-container" style="width:100vw; height:100vh; position:relative;">
-    <canvas id="game-canvas" style="display:block; width:100%; height:100%;"></canvas>
+    <canvas id="game-canvas"></canvas>
 
     <!-- HUD -->
     <div id="hud" aria-hidden="true">
@@ -39,11 +39,33 @@
     </div>
   </div>
 
-  <!-- 加载 pyodide -->
+  <script type="text/python">
+# -------- utils.py 内容开始 --------
+import random
+
+def rects_collide(a, b):
+    return (
+        a['x'] < b['x'] + b['w'] and
+        a['x'] + a['w'] > b['x'] and
+        a['y'] < b['y'] + b['h'] and
+        a['y'] + a['h'] > b['y']
+    )
+
+def clamp(x, a, b):
+    return max(a, min(x, b))
+
+def randf(a, b):
+    return random.uniform(a, b)
+
+def load_sprite(path):
+    # 在浏览器中加载图片的 placeholder 函数
+    return {"path": path}
+# -------- utils.py 内容结束 --------
+  </script>
+
   <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js" defer></script>
   <script>
     async function startPyodideAndRun() {
-      // 等待 pyodide 脚本加载完成
       if (typeof loadPyodide !== 'function') {
         await new Promise(resolve => {
           const check = () => (typeof loadPyodide === 'function') ? resolve() : setTimeout(check, 50);
@@ -54,12 +76,9 @@
       const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/" });
 
       try {
-        // 先加载 utils.py
-        const utilsResp = await fetch("utils.py");
-        const utilsCode = await utilsResp.text();
+        const utilsCode = document.querySelector('script[type="text/python"]').textContent;
         await pyodide.runPythonAsync(utilsCode);
 
-        // 再加载 main.py
         const mainResp = await fetch("main.py");
         const mainCode = await mainResp.text();
         await pyodide.runPythonAsync(mainCode);
