@@ -1,64 +1,78 @@
 <!doctype html>
 <html lang="zh">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>沙漠风暴 REPACK</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Storm Plane Repack</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="hud" style="display:none;">
-    <div id="score">Score: <span id="scoreValue">0</span></div>
-    <div id="lives">Lives: <span id="livesValue">3</span></div>
-    <div id="level">Level: <span id="levelValue">1</span></div>
-  </div>
+  <div id="game-container" style="width:100vw; height:100vh; position:relative;">
+    <canvas id="game-canvas" style="display:block; width:100%; height:100%;"></canvas>
 
-  <canvas id="game-canvas" width="800" height="600"></canvas>
+    <!-- HUD -->
+    <div id="hud" aria-hidden="true">
+      <div id="score">Score: 0</div>
+      <div id="lives">HP: 100</div>
+      <div id="level">难度: normal</div>
+    </div>
 
-  <div id="menu">
-    <div class="panel">
-      <div class="title-row">
-        <div class="hearts" aria-hidden="true">❤❤❤</div>
-        <h1 id="gameTitle">Storm Plane Repack</h1>
+    <!-- 菜单层 -->
+    <div id="menu">
+      <div class="panel">
+        <div class="title-row">
+          <div class="hearts">❤❤❤</div>
+          <h1>沙漠风暴Repack</h1>
+        </div>
+        <div class="btn-row">
+          <div class="btns">
+            <button data-diff="easy">简单</button>
+            <button data-diff="normal" class="active">普通</button>
+            <button data-diff="hard">困难</button>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="start-btn">开始游戏</button>
+        </div>
+        <div class="menu-hint">点击“开始游戏”按钮进入</div>
       </div>
-
-      <div class="btn-row" id="difficultyRow">
-        <label class="difficulty">
-          <input type="radio" name="difficulty" value="easy" checked>
-          <span>简单</span>
-        </label>
-        <label class="difficulty">
-          <input type="radio" name="difficulty" value="normal">
-          <span>普通</span>
-        </label>
-        <label class="difficulty">
-          <input type="radio" name="difficulty" value="hard">
-          <span>困难</span>
-        </label>
-      </div>
-
-      <div class="btn-row">
-        <button id="start-btn" type="button">开始游戏</button>
-      </div>
-
-      <div class="menu-hint" id="startHint">点击“开始游戏”按钮进入</div>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+  <!-- 加载 pyodide -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js" defer></script>
   <script>
-    async function main() {
-      const pyodide = await loadPyodide();
-      await pyodide.loadPackage(["micropip"]);
-      await pyodide.runPythonAsync(`
-        import micropip
-        await micropip.install([])
-      `);
-      await pyodide.runPythonAsync(await (await fetch("utils.py")).text());
-      let utils_code = await (await fetch("utils.py")).text();
-      pyodide.FS.writeFile("utils.py", utils_code);
-      await pyodide.runPythonAsync(await (await fetch("main.py")).text());
+    async function startPyodideAndRun() {
+      // 等待 pyodide 脚本加载完成
+      if (typeof loadPyodide !== 'function') {
+        await new Promise(resolve => {
+          const check = () => (typeof loadPyodide === 'function') ? resolve() : setTimeout(check, 50);
+          check();
+        });
+      }
+
+      const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/" });
+
+      try {
+        // 先加载 utils.py
+        const utilsResp = await fetch("utils.py");
+        const utilsCode = await utilsResp.text();
+        await pyodide.runPythonAsync(utilsCode);
+
+        // 再加载 main.py
+        const mainResp = await fetch("main.py");
+        const mainCode = await mainResp.text();
+        await pyodide.runPythonAsync(mainCode);
+      } catch (e) {
+        console.error("Failed to load/run Python code:", e);
+      }
     }
-    main();
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', startPyodideAndRun, { once: true });
+    } else {
+      startPyodideAndRun();
+    }
   </script>
 </body>
 </html>
