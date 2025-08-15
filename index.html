@@ -2,7 +2,8 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>沙漠风暴 - Repack</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
@@ -11,6 +12,25 @@
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         <div id="loading">资源加载中...</div>
+
+        <div id="hud">
+            <span id="score">Score: 0</span>
+            <span id="lives"></span>
+            <span id="level"></span>
+        </div>
+
+        <div id="menu">
+          <div class="panel">
+            <h1>沙漠风暴</h1>
+            <p>请选择难度：</p>
+            <div class="btns">
+              <button data-diff="easy">新手</button>
+              <button data-diff="normal" class="active">普通</button>
+              <button data-diff="hard">噩梦</button>
+            </div>
+            <button id="start-btn">开始游戏</button>
+          </div>
+        </div>
     </div>
 
     <script>
