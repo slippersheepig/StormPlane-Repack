@@ -1,97 +1,54 @@
 <!doctype html>
 <html lang="zh">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Storm Plane Repack</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>沙漠风暴REPACK</title>
+  <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-  <div id="game-container" style="width:100vw; height:100vh; position:relative;">
-    <canvas id="game-canvas"></canvas>
+  <canvas id="bgCanvas" aria-hidden="true"></canvas>
 
-    <!-- HUD -->
-    <div id="hud" aria-hidden="true">
-      <div id="score">Score: 0</div>
-      <div id="lives">HP: 100</div>
-      <div id="level">难度: normal</div>
+  <header id="topbar">
+    <div id="hud">
+      <div id="score">分数：0</div>
+      <div id="lives">生命：100</div>
+      <div id="level">难度：普通</div>
     </div>
+  </header>
 
-    <!-- 菜单层 -->
-    <div id="menu">
-      <div class="panel">
-        <div class="title-row">
-          <div class="hearts">❤❤❤</div>
-          <h1>沙漠风暴Repack</h1>
-        </div>
-        <div class="btn-row">
-          <div class="btns">
-            <button data-diff="easy">简单</button>
-            <button data-diff="normal" class="active">普通</button>
-            <button data-diff="hard">困难</button>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button id="start-btn">开始游戏</button>
-        </div>
-        <div class="menu-hint">点击“开始游戏”按钮进入</div>
+  <div id="menu">
+    <div class="panel">
+      <h1>逸一世误一时</h1>
+      <div class="btns">
+        <button data-diff="easy">简单</button>
+        <button data-diff="normal" class="active">普通</button>
+        <button data-diff="hard">困难</button>
       </div>
+      <button id="start-btn">开始游戏</button>
     </div>
   </div>
 
-  <script type="text/python">
-# -------- utils.py 内容开始 --------
-import random
+  <script type="module">
+    import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.mjs";
+    const pyodide = await loadPyodide();
 
-def rects_collide(a, b):
-    return (
-        a['x'] < b['x'] + b['w'] and
-        a['x'] + a['w'] > b['x'] and
-        a['y'] < b['y'] + b['h'] and
-        a['y'] + a['h'] > b['y']
-    )
-
-def clamp(x, a, b):
-    return max(a, min(x, b))
-
-def randf(a, b):
-    return random.uniform(a, b)
-
-def load_sprite(path):
-    # 在浏览器中加载图片的 placeholder 函数
-    return {"path": path}
-# -------- utils.py 内容结束 --------
-  </script>
-
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js" defer></script>
-  <script>
-    async function startPyodideAndRun() {
-      if (typeof loadPyodide !== 'function') {
-        await new Promise(resolve => {
-          const check = () => (typeof loadPyodide === 'function') ? resolve() : setTimeout(check, 50);
-          check();
-        });
-      }
-
-      const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/" });
-
+    async function main() {
       try {
-        const utilsCode = document.querySelector('script[type="text/python"]').textContent;
-        await pyodide.runPythonAsync(utilsCode);
+        // 写入 utils.py 到虚拟文件系统
+        const utilsResp = await fetch("utils.py");
+        const utilsCode = await utilsResp.text();
+        pyodide.FS.writeFile("utils.py", utilsCode);
 
+        // 加载并运行 main.py
         const mainResp = await fetch("main.py");
         const mainCode = await mainResp.text();
         await pyodide.runPythonAsync(mainCode);
-      } catch (e) {
-        console.error("Failed to load/run Python code:", e);
+      } catch (err) {
+        console.error("Failed to load/run Python code:", err);
       }
     }
-
-    if (document.readyState === 'loading') {
-      window.addEventListener('DOMContentLoaded', startPyodideAndRun, { once: true });
-    } else {
-      startPyodideAndRun();
-    }
+    main();
   </script>
 </body>
 </html>
