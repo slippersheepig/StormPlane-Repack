@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-# Enhanced StormPlane (Repack) with start menu, touch controls, enemy bullets,
-# multiple weapons, boss, power-ups, basic effects, and difficulty levels.
 from js import document, window, console, Math
 from pyodide.ffi import create_proxy
 from utils import rects_collide, clamp, randf, load_sprite
