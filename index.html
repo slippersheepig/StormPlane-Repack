@@ -1,66 +1,58 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>沙漠风暴REPACK</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>沙漠风暴 REPACK</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="game-canvas"></canvas>
+  <div id="hud" style="display:none;">
+    <div id="score">Score: <span id="scoreValue">0</span></div>
+    <div id="lives">Lives: <span id="livesValue">3</span></div>
+    <div id="level">Level: <span id="levelValue">1</span></div>
+  </div>
 
-    <div id="hud">
-        <div id="score">Score: 0</div>
-        <div id="lives">❤❤❤</div>
+  <canvas id="game-canvas" width="800" height="600"></canvas>
+
+  <div id="menu">
+    <div class="panel">
+      <div class="title-row">
+        <div class="hearts" aria-hidden="true">❤❤❤</div>
+        <h1 id="gameTitle">Storm Plane Repack</h1>
+      </div>
+
+      <div class="btn-row" id="difficultyRow">
+        <label class="difficulty">
+          <input type="radio" name="difficulty" value="easy" checked>
+          <span>简单</span>
+        </label>
+        <label class="difficulty">
+          <input type="radio" name="difficulty" value="normal">
+          <span>普通</span>
+        </label>
+        <label class="difficulty">
+          <input type="radio" name="difficulty" value="hard">
+          <span>困难</span>
+        </label>
+      </div>
+
+      <div class="btn-row">
+        <button id="start-btn" type="button">开始游戏</button>
+      </div>
+
+      <div class="menu-hint" id="startHint">点击“开始游戏”按钮进入</div>
     </div>
-
-    <div id="menu">
-        <div class="panel">
-            <h1>Storm Plane</h1>
-            <div class="btn-row">
-                <button id="easy">简单</button>
-                <button id="normal">普通</button>
-                <button id="hard">困难</button>
-            </div>
-            <button id="start-btn">开始游戏</button>
-            <div id="menu-hint" class="menu-hint">点击“开始游戏”按钮进入</div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
-    <script>
-        const canvas = document.getElementById("game-canvas");
-        const ctx = canvas.getContext("2d");
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener("resize", resizeCanvas);
-        resizeCanvas();
-
-        async function main() {
-            const pyodide = await loadPyodide();
-            await pyodide.loadPackage(["micropip"]);
-            await pyodide.runPythonAsync(`
-                import micropip
-                await micropip.install([])
-            `);
-            await pyodide.runPythonAsync(await (await fetch("utils.py")).text());
-            await pyodide.runPythonAsync(await (await fetch("main.py")).text());
-
-            try { document.getElementById("hud").style.display = "none"; } catch(e) {}
-
-            try {
-                const startBtn = document.getElementById("start-btn");
-                startBtn.addEventListener("click", function(){
-                    try {
-                        if (window.start_game) { window.start_game(); return; }
-                    } catch(e){}
-                    try { pyodide.runPythonAsync('on_start(None)'); } catch(e){ console.error(e); }
-                });
-            } catch(e) { console.error(e); }
-        }
-        main();
-    </script>
+  </div>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+  <script>
+    async function main() {
+      const pyodide = await loadPyodide();
+      pyodide.globals.set("window", window);
+      await pyodide.runPythonAsync(await (await fetch("utils.py")).text());
+      await pyodide.runPythonAsync(await (await fetch("main.py")).text());
+    }
+    main();
+  </script>
 </body>
 </html>
