@@ -5,44 +5,77 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>沙漠风暴REPACK</title>
   <link rel="stylesheet" href="style.css" />
+  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
 </head>
 <body>
+  <!-- 背景和游戏容器 -->
+  <canvas id="bgCanvas" aria-hidden="true"></canvas>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+  </div>
   <!-- HUD：分数/生命/难度 -->
   <div id="hud" aria-hidden="true">
     <div id="score">分数：0</div>
     <div id="lives">生命：100</div>
     <div id="level">难度：普通</div>
   </div>
-
-  <!-- 菜单：标题 + 难度选择 + 开始按钮 -->
+  <!-- 首页菜单 -->
   <div id="menu">
     <div class="panel">
-      <h1>逸一世误一时</h1>
-      <div class="btns">
+      <h1>沙漠风暴 REPACK</h1>
+      <div class="btns" id="diff-buttons" role="group" aria-label="选择难度">
         <button type="button" data-diff="easy">简单</button>
-        <button type="button" data-diff="normal">普通</button>
+        <button type="button" data-diff="normal" class="active">普通</button>
         <button type="button" data-diff="hard">困难</button>
       </div>
-      <button id="start-btn" type="button">开始游戏</button>
+      <button id="start-btn" class="primary">开始游戏</button>
     </div>
   </div>
-
-  <div id="game-container"></div>
-
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
   <script>
-    (async () => {
-      try {
-        const pyodide = await loadPyodide();
-        const utilsCode = await fetch("utils.py").then(r => r.text());
-        pyodide.FS.writeFile("/utils.py", utilsCode);
-        const mainCode = await fetch("main.py").then(r => r.text());
-        await pyodide.runPythonAsync(mainCode);
-      } catch (err) {
-        console.error("Failed to load/run Python code:", err);
-        alert("加载 Python 失败：" + err);
-      }
-    })();
+  window.addEventListener("DOMContentLoaded", async () => {
+    const menu = document.getElementById("menu");
+    menu.style.zIndex = "999";
+    menu.style.pointerEvents = "auto";
+
+    try {
+      const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/" });
+
+      const [utilsCode, mainCode] = await Promise.all([
+        fetch("utils.py").then(r => {
+          if (!r.ok) throw new Error("读取 utils.py 失败：" + r.status);
+          return r.text();
+        }),
+        fetch("main.py").then(r => {
+          if (!r.ok) throw new Error("读取 main.py 失败：" + r.status);
+          return r.text();
+        }),
+      ]);
+
+      try { pyodide.FS.mkdir("utils"); } catch {}
+      pyodide.FS.writeFile("utils.py", utilsCode);
+      pyodide.FS.writeFile("utils/__init__.py", utilsCode);
+
+      await pyodide.runPythonAsync(`
+import sys, importlib, os
+# 把根目录和当前目录加入 sys.path
+for p in ["", "/", "."]:
+    if p not in sys.path: sys.path.insert(0, p)
+importlib.invalidate_caches()
+# 测试 utils 是否可导入
+try:
+    import utils
+except Exception as e:
+    raise RuntimeError("utils 模块不可导入: " + repr(e))
+print("utils 导入成功")
+`);
+
+      await pyodide.runPythonAsync(mainCode);
+      console.log("Python 游戏逻辑已启动");
+    } catch (err) {
+      console.error("Failed to load/run Python code:", err);
+      alert("加载 Python 失败：" + err);
+    }
+  });
   </script>
 </body>
 </html>
