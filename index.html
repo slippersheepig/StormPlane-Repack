@@ -121,7 +121,7 @@
       }, { passive: true });
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+  <script src="https://o.sheepgreen.top/pyodide/v0.28.1/full/pyodide.js"></script>
   <script>
     (async () => {
       const imgs = [
@@ -183,7 +183,7 @@
       })));
   
       try {
-        const pyodide = await loadPyodide({indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/"});
+        const pyodide = await loadPyodide();
         const utilsCode = await fetch("utils.py").then(r => r.text());
         pyodide.FS.writeFile("/utils.py", utilsCode);
         try { pyodide.FS.mkdir("utils"); } catch(e) {}
