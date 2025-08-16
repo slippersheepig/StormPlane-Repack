@@ -4,6 +4,41 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>沙漠风暴REPACK</title>
+  <link rel="icon" 
+        href="data:image/svg+xml;utf8,
+        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+          <defs>
+            <linearGradient id='shipGrad' x1='0%' y1='0%' x2='100%' y2='100%'>
+              <stop offset='0%' stop-color='%23a1c4fd'/>
+              <stop offset='100%' stop-color='%230c3483'/>
+            </linearGradient>
+            <radialGradient id='flameGrad' cx='50%' cy='50%' r='50%'>
+              <stop offset='0%' stop-color='%23ffff66'/>
+              <stop offset='50%' stop-color='%23ff6600'/>
+              <stop offset='100%' stop-color='%23cc0000'/>
+            </radialGradient>
+            <filter id='doubleGlow' x='-50%' y='-50%' width='200%' height='200%'>
+              <feGaussianBlur in='SourceGraphic' stdDeviation='6' result='outerBlur'/>
+              <feMerge>
+                <feMergeNode in='outerBlur'/>
+                <feGaussianBlur in='SourceGraphic' stdDeviation='2' result='innerBlur'/>
+                <feMergeNode in='innerBlur'/>
+                <feMergeNode in='SourceGraphic'/>
+              </feMerge>
+            </filter>
+          </defs>
+          <ellipse cx='50' cy='60' rx='25' ry='15' 
+                   fill='url(%23shipGrad)' filter='url(%23doubleGlow)'/>
+          <circle cx='50' cy='50' r='10' fill='%23add8e6' stroke='%23033e80' stroke-width='2'/>
+          <polygon points='35,60 30,75 40,70' fill='%235577aa'/>
+          <polygon points='65,60 70,75 60,70' fill='%235577aa'/>
+          <ellipse cx='50' cy='78' rx='10' ry='18' fill='url(%23flameGrad)' opacity='0.8'/>
+          <circle cx='20' cy='20' r='2' fill='%23ffffff'/>
+          <circle cx='80' cy='30' r='1.5' fill='%23ffffff'/>
+          <circle cx='70' cy='15' r='1' fill='%23ffffff'/>
+          <circle cx='25' cy='40' r='1.2' fill='%23ffffff'/>
+          <circle cx='85' cy='65' r='1.8' fill='%23ffffff'/>
+        </svg>">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
