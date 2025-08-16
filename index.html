@@ -28,6 +28,30 @@
       <div class="sr-only">正在加载资源，请稍候...</div>
     </div>
   </div>
+  <script>
+  (function ensureLoader(){
+    try {
+      const ld = document.getElementById('loading');
+      if(!ld) return;
+      if(ld.querySelector && ld.querySelector('.spinner')) {
+        ld.innerHTML = `
+        <div class="loader-circle" role="presentation">
+          <svg class="progress" viewBox="0 0 36 36" aria-hidden="true">
+            <path class="bg" d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831a15.9155 15.9155 0 1 0 0-31.831"/>
+            <path class="meter" stroke-dasharray="0,100" d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831a15.9155 15.9155 0 1 0 0-31.831"/>
+          </svg>
+          <div class="progress-text">0%</div>
+          <div class="sr-only">正在加载资源，请稍候...</div>
+        </div>`;
+      }
+      try {
+        const s = document.createElement('style');
+        s.textContent = "#loading .spinner{display:none !important;} #loading .loader-circle{display:flex !important;}";
+        document.head.appendChild(s);
+      } catch(e){}
+    } catch(e){}
+  })();
+  </script>
   <!-- 首页菜单 -->
   <div id="menu">
     <div class="panel">
@@ -97,15 +121,26 @@
       })));
 
       window.PRELOADED_AUDIO = {};
+      // Try to preload audio, but use a timeout fallback because some mobile browsers (iOS Safari) block audio events until user interaction.
       await Promise.all(audios.map(p => new Promise(res => {
-        try {
+       try {
           const a = new Audio();
           a.preload = "auto";
           a.src = p;
-          a.oncanplaythrough = () => { window.PRELOADED_AUDIO[p] = a; loadedAssets++; updateProgress(); res(true); };
-          a.onerror = () => { console.warn("Audio failed to load:", p); window.PRELOADED_AUDIO[p] = null; loadedAssets++; updateProgress(); res(false); };
+          let resolved = false;
+          function doResolve(ok) {
+            if (resolved) return;
+            resolved = true;
+            if (ok) window.PRELOADED_AUDIO[p] = a; else window.PRELOADED_AUDIO[p] = null;
+            loadedAssets++; updateProgress();
+            res(ok);
+          }
+          a.oncanplaythrough = () => doResolve(true);
+          a.onerror = () => doResolve(false);
+          // Fallback: resolve (as NOT loaded) after 1200ms so loader won't hang at ~96% on iOS.
+          setTimeout(() => doResolve(false), 1200);
         } catch (e) {
-          console.warn("Audio preloading error:", e);
+          console.warn("Audio preload error:", e);
           window.PRELOADED_AUDIO[p] = null;
           loadedAssets++; updateProgress();
           res(false);
