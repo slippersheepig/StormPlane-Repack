@@ -2,6 +2,13 @@ from js import document, window, console, Math
 from pyodide.ffi import create_proxy
 from utils import rects_collide, clamp, randf, load_sprite
 
+# ---- safe remove helper to avoid "list.remove(x): x not in list" ----
+def safe_remove(seq, item):
+    try:
+        seq.remove(item)
+    except ValueError:
+        pass
+
 # Lazily ensure canvas exists and return (canvas, ctx)
 def ensure_canvas_and_ctx():
     canvas = document.getElementById("game-canvas")
@@ -643,7 +650,7 @@ def update():
         b.update()
         b.draw()
         if b.y<-40 or b.y>canvas.height+40 or b.x<-40 or b.x>canvas.width+40:
-            bullets.remove(b)
+            safe_remove(bullets, b)
 
     # Powers
     for p in powers[:]:
@@ -670,16 +677,16 @@ def update():
             if rects_collide(b, e):
                 effects.append(Explosion(b.x, b.y))
                 play_sound("boom", 0.25)
-                bullets.remove(b); e.hp -= 20
+                safe_remove(bullets, b); e.hp -= 20
                 if e.hp<=0:
                     score += 10 if e.kind=="small" else 25
                     if Math.random()<0.25: spawn_power(e.x+e.w/2, e.y+e.h/2)
-                    enemies.remove(e)
+                    safe_remove(enemies, e)
                 break
         if boss and rects_collide(b, boss):
             effects.append(Explosion(b.x, b.y))
             play_sound("boom2", 0.25)
-            bullets.remove(b); boss.hp -= 12
+            safe_remove(bullets, b); boss.hp -= 12
             score += 2
             if boss.hp<=0:
                 score += 300
@@ -688,20 +695,19 @@ def update():
 
     # Enemy bullets vs player
     for b in [bb for bb in bullets if bb.owner=="enemy"]:
-        if player_center_hit(e):
+        if player_center_hit(b):
             effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
             play_sound("boom", 0.25)
-            try: bullets.remove(b)
-            except: pass
+            safe_remove(bullets, b)
             player.hit(15)
             shake = 8
 
     # Enemy body vs player
     for e in enemies[:]:
-        if player_center_hit(b):
+        if player_center_hit(e):
             effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
             play_sound("boom", 0.25)
-            enemies.remove(e)
+            safe_remove(enemies, e)
             player.hit(25)
             shake = 10
 
@@ -720,7 +726,7 @@ def update():
                 player.shield = 300
             else:
                 player.hp = min(100, player.hp+30)
-            powers.remove(p)
+            safe_remove(powers, p)
 
     # Draw player last
     player.draw()
@@ -728,7 +734,8 @@ def update():
     # Effects
     for fx in effects[:]:
         fx.update(); fx.draw()
-        if fx.t<=0: effects.remove(fx)
+        if fx.t<=0:
+            safe_remove(effects, fx)
 
     # Shake (装饰)
     if shake>0:
