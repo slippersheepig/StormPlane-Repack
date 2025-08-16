@@ -190,3 +190,15 @@ body.playing #hud {
 /* Mobile fallback: hide old text spinner, ensure loader circle visible */
 #loading .spinner{display:none !important;}
 #loading .loader-circle{display:flex !important;}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
