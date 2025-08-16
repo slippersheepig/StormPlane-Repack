@@ -186,3 +186,7 @@ body.playing #hud {
   transform: rotate(-90deg); transform-origin: 50% 50%;
 }
 .progress-text { font-size:14px; font-weight:600; color:#fff; }
+
+/* Mobile fallback: hide old text spinner, ensure loader circle visible */
+#loading .spinner{display:none !important;}
+#loading .loader-circle{display:flex !important;}
