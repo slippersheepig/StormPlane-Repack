@@ -212,6 +212,55 @@ _fallback("power_shield", f"{IMG_BASE}/plane_shield.png")
 _fallback("power_heal",   f"{IMG_BASE}/life_goods.png")
 _fallback("power_missile",f"{IMG_BASE}/missile_goods.png")
 
+bg_offscreen = None
+_bg_offscreen_width = 0
+_bg_offscreen_height = 0
+
+def build_bg_offscreen():
+    global bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
+    try:
+        img1 = SPRITES.get("bg_01")
+        img2 = SPRITES.get("bg_02")
+    except Exception:
+        img1 = None
+        img2 = None
+
+    try:
+        ready1 = bool(img1 and getattr(img1, "complete", False) and getattr(img1, "naturalWidth", 0) > 0)
+    except Exception:
+        ready1 = False
+    try:
+        ready2 = bool(img2 and getattr(img2, "complete", False) and getattr(img2, "naturalWidth", 0) > 0)
+    except Exception:
+        ready2 = False
+
+    if not (ready1 and ready2 and canvas and ctx):
+        try:
+            window.setTimeout(create_proxy(build_bg_offscreen), 300)
+        except Exception:
+            pass
+        return
+
+    try:
+        w = int(Math.floor(canvas.width))
+        h = int(Math.floor(canvas.height))
+        off = document.createElement("canvas")
+        off.width = w
+        off.height = h * 2
+        offctx = off.getContext("2d")
+        offctx.drawImage(img1, 0, 0, w, h)
+        offctx.drawImage(img2, 0, h, w, h)
+        bg_offscreen = off
+        _bg_offscreen_width = off.width
+        _bg_offscreen_height = off.height
+    except Exception:
+        try:
+            window.setTimeout(create_proxy(build_bg_offscreen), 500)
+        except Exception:
+            pass
+
+build_bg_offscreen()
+
 SOUNDS = {
     "shoot":  f"{SND_BASE}/shoot.mp3",
     "boom":   f"{SND_BASE}/explosion.mp3",
@@ -617,42 +666,64 @@ spawn_boss_at = 500  # score threshold
 keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
 
 def draw_bg():
-    global bg_offset
-    # If background images are available, draw a vertically scrolling tiled background.
+    global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
     try:
-        img1 = SPRITES.get("bg_01")
-        img2 = SPRITES.get("bg_02")
-    except Exception:
-        img1 = None
-        img2 = None
-    imgs = [i for i in (img1, img2) if i]
-    if imgs and canvas and ctx:
-        # Scroll speed (pixels per frame)
-        speed = 1.0
-        try:
-            bg_offset = (bg_offset + speed) % canvas.height
-        except Exception:
-            bg_offset = 0
-        y = -bg_offset
-        idx = 0
-        # Draw enough tiles to cover the whole canvas
-        while y < canvas.height:
-            img = imgs[idx % len(imgs)]
+        if bg_offscreen and _bg_offscreen_width == canvas.width and _bg_offscreen_height == canvas.height * 2:
+            speed = 1.0
             try:
-                ctx.drawImage(img, 0, y, canvas.width, canvas.height)
+                bg_offset = (bg_offset + speed) % canvas.height
             except Exception:
-                # If drawImage fails, fall back to gradient
-                break
-            y += canvas.height
-            idx += 1
-        return
+                bg_offset = 0
+            try:
+                ctx.drawImage(bg_offscreen, 0, -bg_offset, canvas.width, _bg_offscreen_height)
+                return
+            except Exception:
+                pass
+        else:
+            try:
+                build_bg_offscreen()
+            except Exception:
+                pass
 
-    # Fallback: simple gradient (original)
-    g = ctx.createLinearGradient(0,0,0,canvas.height)
-    g.addColorStop(0, "#f0f4ff")
-    g.addColorStop(1, "#c9e6ff")
-    ctx.fillStyle = g
-    ctx.fillRect(0,0,canvas.width,canvas.height)
+        try:
+            img1 = SPRITES.get("bg_01")
+            img2 = SPRITES.get("bg_02")
+        except Exception:
+            img1 = None
+            img2 = None
+        imgs = [i for i in (img1, img2) if i]
+        if imgs and canvas and ctx:
+            speed = 1.0
+            try:
+                bg_offset = (bg_offset + speed) % canvas.height
+            except Exception:
+                bg_offset = 0
+            y = -bg_offset
+            idx = 0
+            while y < canvas.height:
+                img = imgs[idx % len(imgs)]
+                try:
+                    ctx.drawImage(img, 0, y, canvas.width, canvas.height)
+                except Exception:
+                    break
+                y += canvas.height
+                idx += 1
+            return
+    except Exception:
+        pass
+
+    try:
+        g = ctx.createLinearGradient(0,0,0,canvas.height)
+        g.addColorStop(0, "#f0f4ff")
+        g.addColorStop(1, "#c9e6ff")
+        ctx.fillStyle = g
+        ctx.fillRect(0,0,canvas.width,canvas.height)
+    except Exception:
+        try:
+            ctx.fillStyle = "#000"
+            ctx.fillRect(0,0,canvas.width,canvas.height)
+        except Exception:
+            pass
 
 def update():
     global frame, score, game_over, shake, boss, spawn_boss_at
