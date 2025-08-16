@@ -35,35 +35,50 @@
     </div>
   </div>
   <script>
+    // 在 Pyodide/Python 就绪前，先用原生 JS 记录用户的点击
     (function () {
       const menu = document.getElementById('menu');
       const diffBtns = document.querySelectorAll('#diff-buttons button');
       let selected = 'normal';
 
       diffBtns.forEach(btn => {
-        const handler = function (ev) {
+        btn.addEventListener('click', function () {
           diffBtns.forEach(b => b.classList.remove('active'));
           this.classList.add('active');
           selected = this.dataset.diff;
           window.__desiredDifficulty = selected;
-        };
-        btn.addEventListener('click', handler, false);
-        btn.addEventListener('touchstart', handler, { passive: true });
+        }, { passive: true });
       });
 
-      const startHandler = function (ev) {
+      document.getElementById('start-btn').addEventListener('click', function () {
+        // 标记用户已经点过“开始”，等 Python 就绪后自动开局
         window.__startClicked = true;
-      };
-      const startBtn = document.getElementById('start-btn');
-      startBtn.addEventListener('click', startHandler, false);
-      startBtn.addEventListener('touchstart', startHandler, { passive: true });
+      }, { passive: true });
     })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+  <script>
+    (async () => {
+      const imgs = [
+        "./img/bg_01.jpg","./img/bg_02.jpg",
+        "./img/blue_plane.png","./img/red_plane.png","./img/purple_plane.png",
+        "./img/small_enemy.png","./img/big_enemy.png","./img/boss_enemy.png",
+        "./img/red_bullet.png","./img/blue_bullet.png","./img/big_enemy_bullet.png",
+        "./img/boom.png","./img/bullet_goods1.png","./img/plane_shield.png",
+        "./img/life_goods.png","./img/missile_goods.png","./img/text.png",
+        "./img/small.png","./img/big.png","./img/boosplane.png","./img/bigplane_bullet.png",
+        "./img/myplaneexplosion.png","./img/bullet_goods2.png","./img/purple_bullet_goods.png",
+        "./img/red_bullet_goods.png","./img/purple_plane.png","./img/red_plane.png"
+      ];
+      window.PRELOADED_IMAGES = {};
+      await Promise.all(imgs.map(p => new Promise((res) => {
+        const img = new Image();
+        img.onload = () => { window.PRELOADED_IMAGES[p] = img; res(true); };
+        img.onerror = () => { console.warn("Image failed to load:", p); window.PRELOADED_IMAGES[p] = null; res(false); };
+        img.src = p;
+      })));
 
-    (async function () {
-      const loadingEl = document.getElementById('loading');
-      if (loadingEl) loadingEl.style.display = 'flex';
-
-      window.PRELOADED_AUDIO = window.PRELOADED_AUDIO || {};
+      window.PRELOADED_AUDIO = {};
       const audios = ["./sound/game.mp3"];
       await Promise.all(audios.map(p => new Promise(res => {
         try {
@@ -78,21 +93,18 @@
           res(false);
         }
       })));
-
+  
       try {
-        const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js" });
+        const pyodide = await loadPyodide({indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/"});
         const utilsCode = await fetch("utils.py").then(r => r.text());
         pyodide.FS.writeFile("/utils.py", utilsCode);
-        try { pyodide.FS.mkdir("utils"); } catch (e) {}
+        try { pyodide.FS.mkdir("utils"); } catch(e) {}
         pyodide.FS.writeFile("utils/__init__.py", utilsCode);
         const mainCode = await fetch("main.py").then(r => r.text());
         await pyodide.runPythonAsync(mainCode);
-
-        if (loadingEl) loadingEl.style.display = 'none';
       } catch (err) {
         console.error("Failed to load/run Python code:", err);
         alert("加载 Python 失败：" + err);
-        if (loadingEl) loadingEl.style.display = 'none';
       }
     })();
   </script>
