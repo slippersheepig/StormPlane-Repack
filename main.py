@@ -835,7 +835,6 @@ start_btn.addEventListener("click", create_proxy(on_start))
 try:
     if hasattr(window, "__desiredDifficulty") and window.__desiredDifficulty:
         # 让 Python 端的选中状态与菜单一致
-        global selected_diff
         selected_diff = str(window.__desiredDifficulty)
         # 更新菜单按钮的 active 外观
         for i in range(diff_buttons.length):
