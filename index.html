@@ -31,51 +31,50 @@
       <button id="start-btn" class="primary">开始游戏</button>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
   <script>
-  window.addEventListener("DOMContentLoaded", async () => {
-    const menu = document.getElementById("menu");
-    menu.style.zIndex = "999";
-    menu.style.pointerEvents = "auto";
+  (async () => {
+    const imgs = [
+      "./img/blue_plane.png","./img/red_plane.png","./img/purple_plane.png",
+      "./img/small_enemy.png","./img/big_enemy.png","./img/boss_enemy.png",
+      "./img/red_bullet.png","./img/blue_bullet.png","./img/big_enemy_bullet.png",
+      "./img/boom.png","./img/bullet_goods1.png","./img/plane_shield.png",
+      "./img/life_goods.png","./img/missile_goods.png","./img/text.png",
+      "./img/small.png","./img/big.png","./img/boosplane.png","./img/bigplane_bullet.png",
+      "./img/myplaneexplosion.png","./img/bullet_goods2.png","./img/purple_bullet_goods.png",
+      "./img/red_bullet_goods.png","./img/missile_goods.png","./img/bg_01.jpg","./img/bg_02.jpg"
+    ];
+
+    await Promise.all(imgs.map(p => new Promise((res) => {
+      const img = new Image();
+      img.onload = () => res({path: p, ok: true});
+      img.onerror = () => {
+        console.warn("Image failed to load:", p);
+        res({path: p, ok: false});
+      };
+      img.src = p;
+    })));
 
     try {
-      const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/" });
+      const pyodide = await loadPyodide({indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.1/full/"});
 
-      const [utilsCode, mainCode] = await Promise.all([
-        fetch("utils.py").then(r => {
-          if (!r.ok) throw new Error("读取 utils.py 失败：" + r.status);
-          return r.text();
-        }),
-        fetch("main.py").then(r => {
-          if (!r.ok) throw new Error("读取 main.py 失败：" + r.status);
-          return r.text();
-        }),
-      ]);
-
-      try { pyodide.FS.mkdir("utils"); } catch {}
-      pyodide.FS.writeFile("utils.py", utilsCode);
+      const utilsResp = await fetch("utils.py");
+      if (!utilsResp.ok) throw new Error("无法读取 utils.py: " + utilsResp.status);
+      const utilsCode = await utilsResp.text();
+      pyodide.FS.writeFile("/utils.py", utilsCode);
+      try { pyodide.FS.mkdir("utils"); } catch(e) {}
       pyodide.FS.writeFile("utils/__init__.py", utilsCode);
 
-      await pyodide.runPythonAsync(`
-import sys, importlib, os
-# 把根目录和当前目录加入 sys.path
-for p in ["", "/", "."]:
-    if p not in sys.path: sys.path.insert(0, p)
-importlib.invalidate_caches()
-# 测试 utils 是否可导入
-try:
-    import utils
-except Exception as e:
-    raise RuntimeError("utils 模块不可导入: " + repr(e))
-print("utils 导入成功")
-`);
-
+      const mainResp = await fetch("main.py");
+      if (!mainResp.ok) throw new Error("无法读取 main.py: " + mainResp.status);
+      const mainCode = await mainResp.text();
       await pyodide.runPythonAsync(mainCode);
-      console.log("Python 游戏逻辑已启动");
+      console.log("Python 游戏逻辑启动完成");
     } catch (err) {
       console.error("Failed to load/run Python code:", err);
       alert("加载 Python 失败：" + err);
     }
-  });
+  })();
   </script>
 </body>
 </html>
