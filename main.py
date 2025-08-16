@@ -483,7 +483,7 @@ def draw_bg():
     ctx.fillRect(0,0,canvas.width,canvas.height)
 
 def update():
-    global frame, score, game_over, shake
+    global frame, score, game_over, shake, boss
     if state == "menu":
         window.requestAnimationFrame(_raf_proxy)
         return
@@ -634,6 +634,18 @@ def on_start(evt):
     global state
     play_sound("button", 0.4)
     menu.style.display = "none"
+
+    # 读取当前选中的难度按钮，确保与菜单一致
+    try:
+        active = menu.querySelector(".btns button.active")
+        if active:
+            sd = active.getAttribute("data-diff")
+            if sd:
+                global selected_diff
+                selected_diff = sd
+    except Exception:
+        pass
+
     document.body.classList.add("playing")
     reset_game()
     state = "playing"
