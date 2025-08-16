@@ -634,7 +634,15 @@ def setup_controls():
         touch_id = None
 
     canvas.addEventListener("keydown", create_proxy(keydown))
+    try:
+        window.addEventListener("keydown", create_proxy(keydown))
+    except Exception:
+        pass
     canvas.addEventListener("keyup", create_proxy(keyup))
+    try:
+        window.addEventListener("keyup", create_proxy(keyup))
+    except Exception:
+        pass
     # Touch
     canvas.addEventListener("touchstart", create_proxy(on_touchstart), {"passive": False})
     canvas.addEventListener("touchmove", create_proxy(on_touchmove), {"passive": False})
@@ -918,6 +926,10 @@ def on_start(evt):
     global state
     play_sound("button", 0.4)
     menu.style.display = "none"
+    try:
+        document.getElementById('game-canvas').focus()
+    except Exception:
+        pass
     # Try to start background music (looped); use a persistent Audio object on window
     try:
         from js import Audio
