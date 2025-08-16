@@ -376,9 +376,6 @@ def rects_collide(a, b):
     bx = b.x; by = b.y; bw = b.w; bh = b.h
     return (ax < bx+bw and ax+aw > bx and ay < by+bh and ay+ah > by)
 
-def randf():
-    return Math.random()
-
 def update_hud():
     score_el.innerText = f"分数：{int(score)}"
     lives_el.innerText = f"生命：{player.hp}"
