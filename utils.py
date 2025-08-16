@@ -27,9 +27,11 @@ def randf(a, b):
     return random.random()*(b-a)+a
 
 def load_sprite(path):
-    # 尝试加载图片，失败则返回 None
     try:
-        img = Image.new()
+        try:
+            img = Image.new()
+        except Exception:
+            img = Image()
         img.src = path
         return img
     except Exception:
