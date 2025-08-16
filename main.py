@@ -500,17 +500,12 @@ def setup_controls():
                 pass
             keys[k] = False
 
-    document.addEventListener("keydown", create_proxy(keydown), {"passive": False})
-    document.addEventListener("keyup", create_proxy(keyup), {"passive": False})
-
-    def on_blur(e):
-        for kk in list(keys.keys()):
-            keys[kk] = False
-    window.addEventListener("blur", create_proxy(on_blur))
-
     def on_touchstart(e):
         global touch_active, touch_id
-        t = e.changedTouches[0]
+        try:
+            t = e.changedTouches[0]
+        except Exception:
+            return
         touch_active = True
         touch_id = t.identifier
         rect = canvas.getBoundingClientRect()
@@ -534,24 +529,76 @@ def setup_controls():
                 break
         if t:
             try:
-                e.preventDefault()
+                rect = canvas.getBoundingClientRect()
+                px = t.clientX - rect.left
+                py = t.clientY - rect.top
+                player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
+                player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+                try:
+                    e.preventDefault()
+                except Exception:
+                    pass
             except Exception:
                 pass
-            rect = canvas.getBoundingClientRect()
-            px = t.clientX - rect.left
-            py = t.clientY - rect.top
-            player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
-            player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
 
     def on_touchend(e):
         global touch_active, touch_id
         touch_active = False
         touch_id = None
 
+    def on_pointerdown(e):
+        global touch_active, touch_id
+        touch_active = True
+        try:
+            touch_id = e.pointerId
+        except Exception:
+            touch_id = None
+        rect = canvas.getBoundingClientRect()
+        px = e.clientX - rect.left
+        py = e.clientY - rect.top
+        player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
+        player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+        try:
+            e.preventDefault()
+        except Exception:
+            pass
+
+    def on_pointermove(e):
+        if not touch_active:
+            return
+        try:
+            rect = canvas.getBoundingClientRect()
+            px = e.clientX - rect.left
+            py = e.clientY - rect.top
+            player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
+            player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+            try:
+                e.preventDefault()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def on_pointerup(e):
+        global touch_active, touch_id
+        touch_active = False
+        touch_id = None
+
+    canvas.addEventListener("keydown", create_proxy(keydown))
+    canvas.addEventListener("keyup", create_proxy(keyup))
+    # Touch
     canvas.addEventListener("touchstart", create_proxy(on_touchstart), {"passive": False})
     canvas.addEventListener("touchmove", create_proxy(on_touchmove), {"passive": False})
     canvas.addEventListener("touchend", create_proxy(on_touchend), {"passive": False})
     canvas.addEventListener("touchcancel", create_proxy(on_touchend), {"passive": False})
+    # Pointer fallback
+    try:
+        canvas.addEventListener("pointerdown", create_proxy(on_pointerdown))
+        canvas.addEventListener("pointermove", create_proxy(on_pointermove))
+        canvas.addEventListener("pointerup", create_proxy(on_pointerup))
+        canvas.addEventListener("pointercancel", create_proxy(on_pointerup))
+    except Exception:
+        pass
 
 setup_controls()
 
@@ -608,7 +655,7 @@ def draw_bg():
     ctx.fillRect(0,0,canvas.width,canvas.height)
 
 def update():
-    global frame, score, game_over, shake, boss
+    global frame, score, game_over, shake, boss, spawn_boss_at
     if state == "menu":
         window.requestAnimationFrame(_raf_proxy)
         return
@@ -686,12 +733,24 @@ def update():
         if boss and rects_collide(b, boss):
             effects.append(Explosion(b.x, b.y))
             play_sound("boom2", 0.25)
-            safe_remove(bullets, b); boss.hp -= 12
+            try:
+                safe_remove(bullets, b)
+            except Exception:
+                pass
+            try:
+                boss.hp -= 12
+            except Exception:
+                boss.hp = 0
             score += 2
-            if boss.hp<=0:
+
+            if boss.hp <= 0:
                 score += 300
                 effects.append(Explosion(boss.x+boss.w/2, boss.y+boss.h/2))
                 boss = None
+                try:
+                    spawn_boss_at = score + 1000
+                except Exception:
+                    pass
 
     # Enemy bullets vs player
     for b in [bb for bb in bullets if bb.owner=="enemy"]:
