@@ -111,20 +111,32 @@ SND_BASE = "./sound"
 # 将路径转成 Image 对象；若主名不存在则用已知别名兜底
 from js import Image
 def _to_img(path):
-    # Prefer preloaded images stored by index.html into window.PRELOADED_IMAGES (if present)
     try:
-        pre = None
         if hasattr(window, "PRELOADED_IMAGES"):
-            # PRELOADED_IMAGES is a JS object; try .get if exists, otherwise index
-            pre = window.PRELOADED_IMAGES.get(path) if hasattr(window.PRELOADED_IMAGES, "get") else window.PRELOADED_IMAGES[path]
-        if pre:
-            return pre
+            keys = [
+                path,
+                path.replace("./", "/"),
+                path.lstrip("./"),
+                "/" + path.lstrip("./")
+            ]
+            for k in keys:
+                try:
+                    pre = window.PRELOADED_IMAGES.get(k) if hasattr(window.PRELOADED_IMAGES, "get") else window.PRELOADED_IMAGES[k]
+                    if pre is not None and pre is not False:
+                        return pre
+                except Exception:
+                    continue
     except Exception:
-        # PRELOADED_IMAGES not present or access failed; fall back to creating a new Image
         pass
-    img = Image.new()
-    img.src = path
-    return img
+    try:
+        try:
+            img = Image.new()
+        except Exception:
+            img = Image()
+        img.src = path
+        return img
+    except Exception:
+        return None
 
 # 首选命名
 SPRITES = {
@@ -208,7 +220,11 @@ class Player:
     def draw(self):
         img = SPRITES.get(self.sprite_key)
         if img:
-            ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            try:
+                ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            except Exception:
+                ctx.fillStyle = "#2b7"
+                ctx.fillRect(self.x, self.y, self.w, self.h)
         else:
             ctx.fillStyle = "#2b7"
             ctx.fillRect(self.x, self.y, self.w, self.h)
@@ -216,7 +232,7 @@ class Player:
             ctx.strokeStyle = "rgba(0,200,255,0.8)"
             ctx.lineWidth = 3
             ctx.beginPath()
-            ctx.arc(self.x+self.w/2, self.y+self.h/2, self.w*0.7, 0, Math.PI*2)
+            ctx.arc(self.x + self.w/2, self.y + self.h/2, self.w * 0.7, 0, Math.PI * 2)
             ctx.stroke()
     def shoot(self):
         if self.shoot_cd > 0: return
@@ -335,16 +351,25 @@ class Bullet:
         self.w, self.h = 6, 12
         self.owner = owner  # 'player' or 'enemy'
     def draw(self):
-        if self.owner=="player":
-            img = SPRITES.get("bullet_blue" if player.weapon!="single" else "bullet_red")
+        if self.owner == "player":
+            img = SPRITES.get("bullet_blue" if player.weapon != "single" else "bullet_red")
             if img:
-                ctx.drawImage(img, self.x, self.y, self.w, self.h)
+                try:
+                    ctx.drawImage(img, self.x, self.y, self.w, self.h)
+                except Exception:
+                    ctx.fillStyle = "#0bf" if player.weapon != "single" else "#f33"
+                    ctx.fillRect(self.x, self.y, self.w, self.h)
             else:
-                ctx.fillStyle = "#0bf" if player.weapon!="single" else "#f33"
+                ctx.fillStyle = "#0bf" if player.weapon != "single" else "#f33"
                 ctx.fillRect(self.x, self.y, self.w, self.h)
         else:
             img = SPRITES.get("enemy_bullet")
-            if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            if img:
+                try:
+                    ctx.drawImage(img, self.x, self.y, self.w, self.h)
+                except Exception:
+                    ctx.fillStyle = "#f90"
+                    ctx.fillRect(self.x, self.y, self.w, self.h)
             else:
                 ctx.fillStyle = "#f90"
                 ctx.fillRect(self.x, self.y, self.w, self.h)
@@ -660,6 +685,21 @@ def end_game():
     global state, game_over
     state = "gameover"; game_over = True
     document.body.classList.remove("playing")
+
+    try:
+        if hasattr(window, "__bgm_audio") and window.__bgm_audio:
+            try:
+                window.__bgm_audio.pause()
+            except Exception:
+                pass
+            try:
+                window.__bgm_audio.currentTime = 0
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 绘制 GAME OVER 覆盖层
     ctx.fillStyle = "rgba(0,0,0,0.45)"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.fillStyle = "red"
