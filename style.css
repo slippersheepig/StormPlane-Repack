@@ -126,3 +126,8 @@ body.playing #hud {
   #menu .panel { padding: 20px; min-width: 260px; }
   #hud { font-size: 14px; gap: 10px; left: 10px; top: 8px; }
 }
+
+/* 触摸设备下，确保触摸事件直接给到 Canvas，而不是被浏览器手势拦截 */
+#game-container, #game-canvas, canvas {
+  touch-action: none;
+}
