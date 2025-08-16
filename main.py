@@ -477,12 +477,30 @@ touch_id = None
 def setup_controls():
     def keydown(e):
         k = e.key
-        if k == "ArrowLeft": player.x = max(0, player.x - 5)
-        elif k == "ArrowRight": player.x = min(canvas.width-player.w, player.x + 5)
-        elif k == "ArrowUp": player.y = max(0, player.y - 5)
-        elif k == "ArrowDown": player.y = min(canvas.height-player.h, player.y + 5)
-        elif k == " " or k == "Enter": player.shoot()
-    document.body.addEventListener("keydown", create_proxy(keydown))
+        if k in keys:
+            try:
+                e.preventDefault()
+            except Exception:
+                pass
+            keys[k] = True
+
+    def keyup(e):
+        k = e.key
+        if k in keys:
+            try:
+                e.preventDefault()
+            except Exception:
+                pass
+            keys[k] = False
+
+    document.addEventListener("keydown", create_proxy(keydown), {"passive": False})
+    document.addEventListener("keyup", create_proxy(keyup), {"passive": False})
+
+    def on_blur(e):
+        for kk in list(keys.keys()):
+            keys[kk] = False
+    window.addEventListener("blur", create_proxy(on_blur))
+
     def on_touchstart(e):
         global touch_active, touch_id
         t = e.changedTouches[0]
@@ -493,31 +511,40 @@ def setup_controls():
         py = t.clientY - rect.top
         player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
         player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
-        player.shoot()
+        try:
+            e.preventDefault()
+        except Exception:
+            pass
+
     def on_touchmove(e):
-        global touch_active
-        if not touch_active: return
+        global touch_active, touch_id
+        if not touch_active:
+            return
         t = None
         for touch in e.changedTouches:
             if touch.identifier == touch_id:
                 t = touch
                 break
         if t:
-            e.preventDefault()
+            try:
+                e.preventDefault()
+            except Exception:
+                pass
             rect = canvas.getBoundingClientRect()
             px = t.clientX - rect.left
             py = t.clientY - rect.top
             player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
             player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+
     def on_touchend(e):
         global touch_active, touch_id
         touch_active = False
         touch_id = None
 
-    canvas.addEventListener("touchstart", create_proxy(on_touchstart), {"passive":False})
-    canvas.addEventListener("touchmove", create_proxy(on_touchmove), {"passive":False})
-    canvas.addEventListener("touchend", create_proxy(on_touchend), {"passive":False})
-    canvas.addEventListener("touchcancel", create_proxy(on_touchend), {"passive":False})
+    canvas.addEventListener("touchstart", create_proxy(on_touchstart), {"passive": False})
+    canvas.addEventListener("touchmove", create_proxy(on_touchmove), {"passive": False})
+    canvas.addEventListener("touchend", create_proxy(on_touchend), {"passive": False})
+    canvas.addEventListener("touchcancel", create_proxy(on_touchend), {"passive": False})
 
 setup_controls()
 
@@ -588,10 +615,12 @@ def update():
     player.x = clamp(player.x+dx, 0, canvas.width-player.w)
     player.y = clamp(player.y+dy, 0, canvas.height-player.h)
 
-    # Shooting
-    if keys["Space"]: player.shoot()
-    if player.shoot_cd>0: player.shoot_cd -= 1
-    if player.shield>0: player.shield -= 1
+    # Shooting：自动连射（无需按键）
+    player.shoot()
+    if player.shoot_cd > 0:
+        player.shoot_cd -= 1
+    if player.shield > 0:
+        player.shield -= 1
 
     # Enemies
     if Math.random() < DIFF[selected_diff]["enemy_rate"]:
@@ -623,6 +652,18 @@ def update():
         if p.y > canvas.height+40:
             powers.remove(p)
 
+    # —— 我方中心判定半径（可按需要微调，像素）——
+    PLAYER_HIT_RADIUS = 12
+    def _cx(obj):
+        return obj.x + (getattr(obj, 'w', getattr(obj, 'width', 0))) / 2
+    def _cy(obj):
+        return obj.y + (getattr(obj, 'h', getattr(obj, 'height', 0))) / 2
+    def player_center_hit(obj, radius=PLAYER_HIT_RADIUS):
+        px, py = _cx(player), _cy(player)
+        ox, oy = _cx(obj), _cy(obj)
+        dx, dy = ox - px, oy - py
+        return dx*dx + dy*dy <= radius*radius
+    
     # Collisions
     for b in [bb for bb in bullets if bb.owner=="player"]:
         for e in enemies[:]:
@@ -647,7 +688,7 @@ def update():
 
     # Enemy bullets vs player
     for b in [bb for bb in bullets if bb.owner=="enemy"]:
-        if rects_collide(b, player):
+        if player_center_hit(e):
             effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
             play_sound("boom", 0.25)
             try: bullets.remove(b)
@@ -657,7 +698,7 @@ def update():
 
     # Enemy body vs player
     for e in enemies[:]:
-        if rects_collide(e, player):
+        if player_center_hit(b):
             effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
             play_sound("boom", 0.25)
             enemies.remove(e)
@@ -790,6 +831,34 @@ def on_start(evt):
     window.requestAnimationFrame(_raf_proxy)
 
 start_btn.addEventListener("click", create_proxy(on_start))
+# —— 同步用户可能在 Pyodide 初始化期间的点击/选择 —— 
+try:
+    if hasattr(window, "__desiredDifficulty") and window.__desiredDifficulty:
+        # 让 Python 端的选中状态与菜单一致
+        global selected_diff
+        selected_diff = str(window.__desiredDifficulty)
+        # 更新菜单按钮的 active 外观
+        for i in range(diff_buttons.length):
+            b = diff_buttons.item(i)
+            if b.getAttribute("data-diff") == selected_diff:
+                try:
+                    b.classList.add("active")
+                except Exception:
+                    pass
+            else:
+                try:
+                    b.classList.remove("active")
+                except Exception:
+                    pass
+except Exception:
+    pass
+
+try:
+    if hasattr(window, "__startClicked") and window.__startClicked:
+        on_start(None)  # 立即开始游戏
+        window.__startClicked = False
+except Exception:
+    pass
 
 # Initial render (menu visible)
 def first_frame():
