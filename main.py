@@ -111,12 +111,25 @@ SND_BASE = "./sound"
 # 将路径转成 Image 对象；若主名不存在则用已知别名兜底
 from js import Image
 def _to_img(path):
+    # Prefer preloaded images stored by index.html into window.PRELOADED_IMAGES (if present)
+    try:
+        pre = None
+        if hasattr(window, "PRELOADED_IMAGES"):
+            # PRELOADED_IMAGES is a JS object; try .get if exists, otherwise index
+            pre = window.PRELOADED_IMAGES.get(path) if hasattr(window.PRELOADED_IMAGES, "get") else window.PRELOADED_IMAGES[path]
+        if pre:
+            return pre
+    except Exception:
+        # PRELOADED_IMAGES not present or access failed; fall back to creating a new Image
+        pass
     img = Image.new()
     img.src = path
     return img
 
 # 首选命名
 SPRITES = {
+    "bg_01":        f"{IMG_BASE}/bg_01.jpg",
+    "bg_02":        f"{IMG_BASE}/bg_02.jpg",
     "player_blue":  f"{IMG_BASE}/blue_plane.png",
     "player_red":   f"{IMG_BASE}/red_plane.png",
     "player_purple":f"{IMG_BASE}/purple_plane.png",
@@ -466,13 +479,44 @@ effects = []
 boss = None
 score = 0
 frame = 0
+bg_offset = 0
 shake = 0
 spawn_boss_at = 500  # score threshold
 
 keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
 
 def draw_bg():
-    # simple gradient
+    global bg_offset
+    # If background images are available, draw a vertically scrolling tiled background.
+    try:
+        img1 = SPRITES.get("bg_01")
+        img2 = SPRITES.get("bg_02")
+    except Exception:
+        img1 = None
+        img2 = None
+    imgs = [i for i in (img1, img2) if i]
+    if imgs and canvas and ctx:
+        # Scroll speed (pixels per frame)
+        speed = 1.0
+        try:
+            bg_offset = (bg_offset + speed) % canvas.height
+        except Exception:
+            bg_offset = 0
+        y = -bg_offset
+        idx = 0
+        # Draw enough tiles to cover the whole canvas
+        while y < canvas.height:
+            img = imgs[idx % len(imgs)]
+            try:
+                ctx.drawImage(img, 0, y, canvas.width, canvas.height)
+            except Exception:
+                # If drawImage fails, fall back to gradient
+                break
+            y += canvas.height
+            idx += 1
+        return
+
+    # Fallback: simple gradient (original)
     g = ctx.createLinearGradient(0,0,0,canvas.height)
     g.addColorStop(0, "#f0f4ff")
     g.addColorStop(1, "#c9e6ff")
@@ -631,6 +675,38 @@ def on_start(evt):
     global state
     play_sound("button", 0.4)
     menu.style.display = "none"
+    # Try to start background music (looped); use a persistent Audio object on window
+    try:
+        from js import Audio
+        try:
+            if hasattr(window, '__bgm_audio') and window.__bgm_audio:
+                try:
+                    window.__bgm_audio.pause()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if "bgm" in SOUNDS and SOUNDS.get("bgm"):
+            a = Audio.new(SOUNDS.get("bgm"))
+            try:
+                a.loop = True
+            except Exception:
+                pass
+            try:
+                a.volume = 0.35
+            except Exception:
+                pass
+            try:
+                a.play()
+            except Exception:
+                # Some browsers require play after user gesture; this is called by click, should be fine
+                pass
+            try:
+                window.__bgm_audio = a
+            except Exception:
+                pass
+    except Exception as e:
+        console.warn("start bgm failed: " + str(e))
 
     # 读取当前选中的难度按钮，确保与菜单一致
     try:
