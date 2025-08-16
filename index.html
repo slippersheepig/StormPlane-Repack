@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>沙漠风暴REPACK</title>
   <link rel="stylesheet" href="style.css" />
-  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
 </head>
 <body>
   <!-- 背景和游戏容器 -->
@@ -31,6 +30,28 @@
       <button id="start-btn" class="primary">开始游戏</button>
     </div>
   </div>
+  <script>
+    // 在 Pyodide/Python 就绪前，先用原生 JS 记录用户的点击
+    (function () {
+      const menu = document.getElementById('menu');
+      const diffBtns = document.querySelectorAll('#diff-buttons button');
+      let selected = 'normal';
+
+      diffBtns.forEach(btn => {
+        btn.addEventListener('click', function () {
+          diffBtns.forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          selected = this.dataset.diff;
+          window.__desiredDifficulty = selected;
+        }, { passive: true });
+      });
+
+      document.getElementById('start-btn').addEventListener('click', function () {
+        // 标记用户已经点过“开始”，等 Python 就绪后自动开局
+        window.__startClicked = true;
+      }, { passive: true });
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
   <script>
     (async () => {
