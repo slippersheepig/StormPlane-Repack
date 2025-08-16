@@ -27,10 +27,6 @@ def ensure_canvas_and_ctx():
 canvas, ctx = ensure_canvas_and_ctx()
 
 def fit_canvas():
-    """
-    Fit canvas to #game-container if present; otherwise fall back to viewport size.
-    Safe: will not call getBoundingClientRect on None.
-    """
     container = document.getElementById("game-container")
     if container is not None:
         try:
@@ -45,30 +41,54 @@ def fit_canvas():
         # Fallback: entire viewport
         w = window.innerWidth or document.documentElement.clientWidth or 0
         h = window.innerHeight or document.documentElement.clientHeight or 0
+
     try:
         dpr = window.devicePixelRatio or 1
     except Exception:
         dpr = 1
+
     if ctx:
         try:
-            # 调整绘图尺寸
-            canvas.width = w
-            canvas.height = h
+            canvas.style.width = str(w) + "px"
+            canvas.style.height = str(h) + "px"
+            canvas.width = int(Math.floor(w))
+            canvas.height = int(Math.floor(h))
         except Exception:
-            # 某些环境下canvas.width/height的类型可能不同，忽略
             pass
         try:
-            # 重置缩放系数后按窗口缩放
-            ctx.setTransform(1,0,0,1,0,0)
-            ctx.scale(dpr, dpr)
+            ctx.setTransform(1, 0, 0, 1, 0, 0)
         except Exception:
-            # 某些环境上重复 scale 可能出错，忽略
             pass
+
+    try:
+        if "player" in globals() and player is not None:
+            player.x = clamp(player.x, 0, canvas.width - player.w)
+            player.y = clamp(player.y, 0, canvas.height - player.h)
+        if "bullets" in globals() and bullets is not None:
+            for b in list(bullets):
+                try:
+                    b.x = clamp(b.x, -200, canvas.width + 200)
+                    b.y = clamp(b.y, -200, canvas.height + 200)
+                except Exception:
+                    continue
+        if "powers" in globals() and powers is not None:
+            for p in list(powers):
+                try:
+                    p.x = clamp(p.x, -200, canvas.width + 200)
+                    p.y = clamp(p.y, -200, canvas.height + 200)
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
 # Run initial fit and register resize + DOMContentLoaded hooks
 fit_canvas()
 window.addEventListener("resize", create_proxy(lambda e: fit_canvas()))
 document.addEventListener("DOMContentLoaded", create_proxy(lambda e: fit_canvas()), {"once": True})
+try:
+    fit_canvas()
+except Exception:
+    pass
 
 # HUD elements
 hud = document.getElementById("hud")
@@ -439,6 +459,11 @@ def maybe_spawn_boss():
 def reset_game():
     global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake
     player = Player()
+    try:
+        player.x = clamp(player.x, 0, canvas.width - player.w)
+        player.y = clamp(player.y, 0, canvas.height - player.h)
+    except Exception:
+        pass
     enemies.clear(); bullets.clear(); powers.clear(); effects.clear()
     boss = None
     score = 0
