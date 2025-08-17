@@ -362,13 +362,13 @@ class Player:
     def hit(self, dmg):
         if self.shield > 0:
             self.shield = max(0, self.shield - int(dmg * 20))
-            return
+            return False
         self.hp -= dmg
         if self.homing_combo:
             self.homing_combo = False
             self.weapon = "spread"
             _apply_tier_sprite(self)
-            return
+            return True
         try:
             idx = WEAPON_TIERS.index(self.weapon)
         except Exception:
@@ -376,6 +376,7 @@ class Player:
         if idx > 0:
             self.weapon = WEAPON_TIERS[idx - 1]
             _apply_tier_sprite(self)
+        return True
 
 class Enemy:
     def __init__(self, kind="small"):
@@ -949,20 +950,26 @@ def update():
     # Enemy bullets vs player
     for b in [bb for bb in bullets if bb.owner=="enemy"]:
         if player_center_hit(b):
-            effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
-            play_sound("boom", 0.25)
+            damaged = player.hit(15)
             safe_remove(bullets, b)
-            player.hit(15)
-            shake = 8
+            if damaged:
+                effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
+                play_sound("boom", 0.25)
+                shake = 8
+            else:
+                pass
 
     # Enemy body vs player
     for e in enemies[:]:
         if player_center_hit(e):
-            effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
-            play_sound("boom", 0.25)
+            damaged = player.hit(25)
             safe_remove(enemies, e)
-            player.hit(25)
-            shake = 10
+            if damaged:
+                effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
+                play_sound("boom", 0.25)
+                shake = 10
+            else:
+                pass
 
     # Power pickup
     for p in powers[:]:
