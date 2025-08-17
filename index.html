@@ -125,19 +125,51 @@
   <script>
     (async () => {
       const imgs = [
-        "./img/bg_01.jpg","./img/bg_02.jpg",
-        "./img/blue_plane.png","./img/red_plane.png","./img/purple_plane.png",
-        "./img/small_enemy.png","./img/big_enemy.png","./img/boss_enemy.png",
-        "./img/red_bullet.png","./img/blue_bullet.png","./img/big_enemy_bullet.png",
-        "./img/boom.png","./img/bullet_goods1.png","./img/plane_shield.png",
-        "./img/life_goods.png","./img/missile_goods.png","./img/text.png",
-        "./img/small.png","./img/big.png","./img/boosplane.png","./img/bigplane_bullet.png",
-        "./img/myplaneexplosion.png","./img/bullet_goods2.png","./img/purple_bullet_goods.png",
-        "./img/red_bullet_goods.png","./img/purple_plane.png","./img/red_plane.png"
-      ];
+  './img/bg_01.jpg',
+  './img/bg_02.jpg',
+  './img/blue_plane.png',
+  './img/red_plane.png',
+  './img/purple_plane.png',
+  './img/small_enemy.png',
+  './img/big_enemy.png',
+  './img/boss_enemy.png',
+  './img/red_bullet.png',
+  './img/blue_bullet.png',
+  './img/big_enemy_bullet.png',
+  './img/boom.png',
+  './img/bullet_goods1.png',
+  './img/plane_shield.png',
+  './img/life_goods.png',
+  './img/missile_goods.png',
+  './img/text.png',
+  './img/small.png',
+  './img/big.png',
+  './img/boosplane.png',
+  './img/bigplane_bullet.png',
+  './img/myplaneexplosion.png',
+  './img/bullet_goods2.png',
+  './img/purple_bullet_goods.png',
+  './img/red_bullet_goods.png',
+  './img/purple_plane.png',
+  './img/red_plane.png',
+  './img/boss_bullet_default.png',
+  './img/boss_bullet_triangle.png',
+  './img/boss_bullet_thunderball_red.png',
+  './img/boss_bullet_thunderball_green.png',
+  './img/boss_bullet_hellfire_red.png',
+  './img/boss_bullet_hellfire_yellow.png',
+  './img/boss_bullet_sun_particle.png',
+  './img/my_bullet_red.png',
+  './img/my_bullet_blue.png',
+  './img/my_bullet_purple.png'
+];
       window.PRELOADED_IMAGES = {};
       // Progressive loader: count total assets and update UI
-      const audios = ["./sound/game.mp3"];
+      const audios = [
+  './sound/game.mp3',
+  './sound/explosion3.wav',
+  './sound/bigexplosion.wav'
+];
       const totalAssets = imgs.length + audios.length;
       let loadedAssets = 0;
       function updateProgress() {
@@ -156,7 +188,6 @@
       })));
 
       window.PRELOADED_AUDIO = {};
-      // Try to preload audio, but use a timeout fallback because some mobile browsers (iOS Safari) block audio events until user interaction.
       await Promise.all(audios.map(p => new Promise(res => {
        try {
           const a = new Audio();
@@ -172,7 +203,6 @@
           }
           a.oncanplaythrough = () => doResolve(true);
           a.onerror = () => doResolve(false);
-          // Fallback: resolve (as NOT loaded) after 1200ms so loader won't hang at ~96% on iOS.
           setTimeout(() => doResolve(false), 1200);
         } catch (e) {
           console.warn("Audio preload error:", e);
