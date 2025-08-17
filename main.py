@@ -313,6 +313,8 @@ class Player:
         self.weapon = "single"  # single | twin | spread
         self.shoot_cd = 0
         self.shield = 0  # frames
+        self.homing_combo = False
+        self.fallback_single = False
     def draw(self):
         img = SPRITES.get(self.sprite_key)
         if img:
@@ -334,6 +336,13 @@ class Player:
         if self.shoot_cd > 0: return
         self.shoot_cd = 10
         play_sound("shoot", 0.25)
+        if self.homing_combo:
+            bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
+            bullets.append(Bullet(self.x+self.w/2-3, self.y-12, 0, -6, "player", homing=True))
+            return
+        if self.fallback_single:
+            bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
+            return
         if self.weapon == "single":
             bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
         elif self.weapon == "twin":
@@ -347,6 +356,8 @@ class Player:
             self.shield = max(0, self.shield - int(dmg*20))
             return
         self.hp -= dmg
+        self.homing_combo = False
+        self.fallback_single = True
 
 class Enemy:
     def __init__(self, kind="small"):
@@ -452,15 +463,22 @@ class Boss:
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_sun_particle"))
 
 class Bullet:
-    def __init__(self, x, y, vx, vy, owner, sprite_key=None, w=None, h=None):
+    def __init__(self, x, y, vx, vy, owner, sprite_key=None, w=None, h=None, homing=False, speed=None):
         self.x, self.y, self.vx, self.vy = x, y, vx, vy
         self.w, self.h = (w or 6), (h or 12)
         self.owner = owner  # 'player' or 'enemy'
         self.sprite_key = sprite_key
+        self.homing = homing
+        try:
+            vlen = Math.sqrt(vx*vx + vy*vy)
+        except Exception:
+            vlen = 0
+        self.speed = speed or (vlen or 7.0)
     def draw(self):
         if self.owner == "player":
-            # Prefer richer bullet art if present
-            if player.weapon == "single":
+            if getattr(self, "homing", False):
+                img = SPRITES.get("my_bullet_blue") or SPRITES.get("blue_bullet") or SPRITES.get("bullet_blue")
+            elif player.weapon == "single":
                 img = SPRITES.get("my_bullet_red") or SPRITES.get("bullet_red")
             else:
                 # Twin/Spread
@@ -489,6 +507,37 @@ class Bullet:
                 ctx.fillStyle = "#f90"
                 ctx.fillRect(self.x, self.y, self.w, self.h)
     def update(self):
+        if getattr(self, "homing", False) and self.owner == "player":
+            target = None
+            try:
+                if boss:
+                    target = boss
+            except Exception:
+                target = None
+            if not target:
+                nearest = None
+                nearest_d2 = 1e12
+                for e in enemies:
+                    dx = (e.x + e.w/2) - (self.x + self.w/2)
+                    dy = (e.y + e.h/2) - (self.y + self.h/2)
+                    d2 = dx*dx + dy*dy
+                    if d2 < nearest_d2:
+                        nearest_d2 = d2; nearest = e
+                target = nearest
+            if target:
+                dx = (target.x + target.w/2) - (self.x + self.w/2)
+                dy = (target.y + target.h/2) - (self.y + self.h/2)
+                try:
+                    dist = Math.sqrt(dx*dx + dy*dy) or 1
+                except Exception:
+                    dist = (abs(dx)+abs(dy)) or 1
+                spd = getattr(self, "speed", None)
+                if not spd or spd<=0:
+                    spd = 7.0
+                desired_vx = dx / dist * spd
+                desired_vy = dy / dist * spd
+                self.vx = self.vx*0.6 + desired_vx*0.4
+                self.vy = self.vy*0.6 + desired_vy*0.4
         self.x += self.vx
         self.y += self.vy
 
@@ -895,7 +944,10 @@ def update():
         if rects_collide(p, player):
             play_sound("pickup", 0.35)
             if p.kind=="weapon":
-                if player.weapon=="single":
+                if getattr(player, "sprite_key", "") == "player_purple" and player.hp >= 100:
+                    player.homing_combo = True
+                    player.fallback_single = False
+                elif player.weapon=="single":
                     player.weapon="twin"; player.sprite_key="player_red"
                 elif player.weapon=="twin":
                     player.weapon="spread"; player.sprite_key="player_purple"
