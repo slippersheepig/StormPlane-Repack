@@ -531,17 +531,7 @@ def rects_collide(a, b):
 
 def update_hud():
     score_el.innerText = f"分数：{int(score)}"
-    try:
-        hp = int(max(0, min(100, player.hp)))
-        if life_fill_el:
-            life_fill_el.style.width = f"{hp}%"
-        if life_text_el:
-            life_text_el.innerText = str(hp)
-    except Exception:
-        try:
-            lives_el.innerText = f"生命：{player.hp}"
-        except Exception:
-            pass
+    lives_el.innerText = f"生命：{player.hp}"
     level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}"
 
 def spawn_enemy():
