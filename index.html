@@ -50,7 +50,11 @@
   <!-- HUD：分数/生命/难度 -->
   <div id="hud" aria-hidden="true">
     <div id="score">分数：0</div>
-    <div id="lives">生命：100</div>
+    <div id="lives" class="life-ui">
+      <img src="./img/life.png" alt="HP" class="life-icon" width="20" height="20" />
+      <div class="life-bar"><div id="life-fill" class="life-fill" style="width:100%"></div></div>
+      <span id="life-text" class="life-text">100</span>
+    </div>
     <div id="level">难度：普通</div>
   </div>
   <div id="loading" aria-hidden="false" role="status" aria-label="加载中">
@@ -161,14 +165,24 @@
   './img/boss_bullet_sun_particle.png',
   './img/my_bullet_red.png',
   './img/my_bullet_blue.png',
-  './img/my_bullet_purple.png'
+  './img/my_bullet_purple.png',
+  './img/life.png',
+  './img/life_amount.png',
+  './img/middle_enemy.png',
+  './img/bossplane_crazy.png',
+  './img/bossplane_bomb.png'
 ];
       window.PRELOADED_IMAGES = {};
       // Progressive loader: count total assets and update UI
       const audios = [
   './sound/game.mp3',
   './sound/explosion3.wav',
-  './sound/bigexplosion.wav'
+  './sound/bigexplosion.wav',
+  './sound/game.mp3',
+  './sound/explosion3.wav',
+  './sound/bigexplosion.wav',
+  './sound/get_goods.wav',
+  './sound/shoot.mp3'
 ];
       const totalAssets = imgs.length + audios.length;
       let loadedAssets = 0;
