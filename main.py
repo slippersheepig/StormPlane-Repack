@@ -184,6 +184,19 @@ SPRITES = {
     "power_heal":   f"{IMG_BASE}/life_goods.png",
     "power_missile":f"{IMG_BASE}/missile_goods.png",
     "text":         f"{IMG_BASE}/text.png",
+    "boss_bullet_default": f"{IMG_BASE}/boss_bullet_default.png",
+    "boss_bullet_triangle": f"{IMG_BASE}/boss_bullet_triangle.png",
+    "boss_bullet_thunderball_red": f"{IMG_BASE}/boss_bullet_thunderball_red.png",
+    "boss_bullet_thunderball_green": f"{IMG_BASE}/boss_bullet_thunderball_green.png",
+    "boss_bullet_hellfire_red": f"{IMG_BASE}/boss_bullet_hellfire_red.png",
+    "boss_bullet_hellfire_yellow": f"{IMG_BASE}/boss_bullet_hellfire_yellow.png",
+    "boss_bullet_sun_particle": f"{IMG_BASE}/boss_bullet_sun_particle.png",
+    # Aliases used by some resource packs
+    "bossbullet_default": f"{IMG_BASE}/bossbullet_default.png",
+    # Player bullet variants
+    "my_bullet_red": f"{IMG_BASE}/my_bullet_red.png",
+    "my_bullet_blue": f"{IMG_BASE}/my_bullet_blue.png",
+    "my_bullet_purple": f"{IMG_BASE}/my_bullet_purple.png",
 }
 for k, p in list(SPRITES.items()):
     try:
@@ -268,6 +281,8 @@ SOUNDS = {
     "pickup": f"{SND_BASE}/get_goods.wav",
     "button": f"{SND_BASE}/button.wav",
     "bgm":    f"{SND_BASE}/game.mp3",
+    "boom3":  f"{SND_BASE}/explosion3.wav",
+    "bigboom": f"{SND_BASE}/bigexplosion.wav",
 }
 
 # Helper: 播放声音
@@ -406,29 +421,38 @@ class Boss:
             for a in range(-40, 41, 10):
                 rad = (a/180.0)*Math.PI
                 vx, vy = 3*Math.sin(rad), 3*Math.cos(rad)
-                bullets.append(Bullet(cx, cy, vx, vy, "enemy"))
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_default"))
         elif p == 1:
             # aimed bursts
             tx, ty = player.x+player.w/2, player.y+player.h/2
             for k in range(12):
                 ang = Math.atan2(ty-cy, tx-cx) + (k-6)*0.08
                 vx, vy = 3.2*Math.cos(ang), 3.2*Math.sin(ang)
-                bullets.append(Bullet(cx, cy, vx, vy, "enemy"))
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key=("boss_bullet_thunderball_red" if (k % 2 == 0) else "boss_bullet_thunderball_green")))
         else:
             # spiral
             for k in range(24):
                 ang = k*0.26 + Math.random()*0.5
                 vx, vy = 2.6*Math.cos(ang), 2.6*Math.sin(ang)+0.8
-                bullets.append(Bullet(cx, cy, vx, vy, "enemy"))
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_sun_particle"))
 
 class Bullet:
-    def __init__(self, x, y, vx, vy, owner):
+    def __init__(self, x, y, vx, vy, owner, sprite_key=None, w=None, h=None):
         self.x, self.y, self.vx, self.vy = x, y, vx, vy
-        self.w, self.h = 6, 12
+        self.w, self.h = (w or 6), (h or 12)
         self.owner = owner  # 'player' or 'enemy'
+        self.sprite_key = sprite_key
     def draw(self):
         if self.owner == "player":
-            img = SPRITES.get("bullet_blue" if player.weapon != "single" else "bullet_red")
+            # Prefer richer bullet art if present
+            if player.weapon == "single":
+                img = SPRITES.get("my_bullet_red") or SPRITES.get("bullet_red")
+            else:
+                # Twin/Spread
+                if getattr(player, "sprite_key", "") == "player_purple":
+                    img = SPRITES.get("my_bullet_purple") or SPRITES.get("bullet_blue")
+                else:
+                    img = SPRITES.get("my_bullet_blue") or SPRITES.get("bullet_blue")
             if img:
                 try:
                     ctx.drawImage(img, self.x, self.y, self.w, self.h)
@@ -439,7 +463,7 @@ class Bullet:
                 ctx.fillStyle = "#0bf" if player.weapon != "single" else "#f33"
                 ctx.fillRect(self.x, self.y, self.w, self.h)
         else:
-            img = SPRITES.get("enemy_bullet")
+            img = SPRITES.get(self.sprite_key) or SPRITES.get("enemy_bullet")
             if img:
                 try:
                     ctx.drawImage(img, self.x, self.y, self.w, self.h)
@@ -825,6 +849,7 @@ def update():
             if boss.hp <= 0:
                 score += 300
                 effects.append(Explosion(boss.x+boss.w/2, boss.y+boss.h/2))
+                play_sound("bigboom", 0.6)  # optional big explosion
                 boss = None
                 try:
                     spawn_boss_at = score + 1000
@@ -1003,7 +1028,7 @@ except Exception:
 
 try:
     if hasattr(window, "__startClicked") and window.__startClicked:
-        on_start(None)  # 立即开始游戏
+        on_start(None)
         window.__startClicked = False
 except Exception:
     pass
