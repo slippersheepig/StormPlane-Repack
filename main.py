@@ -133,6 +133,17 @@ DIFF = {
     "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
 }
 DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
+WEAPON_TIERS = ("single", "twin", "spread")
+TIER_TO_SPRITE = {
+    "single": "player_blue",
+    "twin":   "player_red",
+    "spread": "player_purple",
+}
+def _apply_tier_sprite(plr):
+    try:
+        plr.sprite_key = TIER_TO_SPRITE.get(plr.weapon, plr.sprite_key)
+    except Exception:
+        pass
 
 IMG_BASE = "./img"
 SND_BASE = "./sound"
@@ -314,7 +325,6 @@ class Player:
         self.shoot_cd = 0
         self.shield = 0  # frames
         self.homing_combo = False
-        self.fallback_single = False
     def draw(self):
         img = SPRITES.get(self.sprite_key)
         if img:
@@ -333,31 +343,39 @@ class Player:
             ctx.arc(self.x + self.w/2, self.y + self.h/2, self.w * 0.7, 0, Math.PI * 2)
             ctx.stroke()
     def shoot(self):
-        if self.shoot_cd > 0: return
+        if self.shoot_cd > 0:
+            return
         self.shoot_cd = 10
         play_sound("shoot", 0.25)
         if self.homing_combo:
-            bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
-            bullets.append(Bullet(self.x+self.w/2-3, self.y-12, 0, -6, "player", homing=True))
-            return
-        if self.fallback_single:
-            bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
+            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player"))
+            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 12, 0, -6, "player", homing=True))
             return
         if self.weapon == "single":
-            bullets.append(Bullet(self.x+self.w/2-3, self.y-10, 0, -8, "player"))
+            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player"))
         elif self.weapon == "twin":
-            bullets.append(Bullet(self.x+6, self.y-10, 0, -8, "player"))
-            bullets.append(Bullet(self.x+self.w-12, self.y-10, 0, -8, "player"))
+            bullets.append(Bullet(self.x + 6, self.y - 10, 0, -8, "player"))
+            bullets.append(Bullet(self.x + self.w - 12, self.y - 10, 0, -8, "player"))
         elif self.weapon == "spread":
-            for dx,dy in [(-2,-8),(0,-9),(2,-8)]:
-                bullets.append(Bullet(self.x+self.w/2-3, self.y-10, dx, dy, "player"))
+            for dx, dy in [(-2, -8), (0, -9), (2, -8)]:
+                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player"))
     def hit(self, dmg):
-        if self.shield>0:
-            self.shield = max(0, self.shield - int(dmg*20))
+        if self.shield > 0:
+            self.shield = max(0, self.shield - int(dmg * 20))
             return
         self.hp -= dmg
-        self.homing_combo = False
-        self.fallback_single = True
+        if self.homing_combo:
+            self.homing_combo = False
+            self.weapon = "spread"
+            _apply_tier_sprite(self)
+            return
+        try:
+            idx = WEAPON_TIERS.index(self.weapon)
+        except Exception:
+            idx = 0
+        if idx > 0:
+            self.weapon = WEAPON_TIERS[idx - 1]
+            _apply_tier_sprite(self)
 
 class Enemy:
     def __init__(self, kind="small"):
@@ -604,6 +622,7 @@ def maybe_spawn_boss():
 def reset_game():
     global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake
     player = Player()
+    _apply_tier_sprite(player)
     try:
         player.x = clamp(player.x, 0, canvas.width - player.w)
         player.y = clamp(player.y, 0, canvas.height - player.h)
@@ -844,21 +863,27 @@ def update():
     if player.shield > 0:
         player.shield -= 1
 
-    # Enemies
-    if Math.random() < DIFF[selected_diff]["enemy_rate"]:
-        spawn_enemy()
-
-    for e in enemies[:]:
-        e.update()
-        e.draw()
-        if e.y > canvas.height+40:
-            enemies.remove(e)
-
-    # Boss
     maybe_spawn_boss()
     if boss:
         boss.update()
         boss.draw()
+
+    if Math.random() < DIFF[selected_diff]["enemy_rate"]:
+        if boss is None:
+            spawn_enemy()
+        else:
+            if selected_diff == "easy":
+                pass
+            elif selected_diff == "normal":
+                enemies.append(Enemy("small"))
+            else:
+                spawn_enemy()
+
+    for e in enemies[:]:
+        e.update()
+        e.draw()
+        if e.y > canvas.height + 40:
+            enemies.remove(e)
 
     # Bullets
     for b in bullets[:]:
@@ -943,16 +968,20 @@ def update():
     for p in powers[:]:
         if rects_collide(p, player):
             play_sound("pickup", 0.35)
-            if p.kind=="weapon":
-                if getattr(player, "sprite_key", "") == "player_purple" and player.hp >= 100:
-                    player.homing_combo = True
-                    player.fallback_single = False
-                elif player.weapon=="single":
-                    player.weapon="twin"; player.sprite_key="player_red"
-                elif player.weapon=="twin":
-                    player.weapon="spread"; player.sprite_key="player_purple"
+            if p.kind == "weapon":
+                if player.weapon == "single":
+                    player.weapon = "twin"
+                    _apply_tier_sprite(player)
+                elif player.weapon == "twin":
+                    player.weapon = "spread"
+                    _apply_tier_sprite(player)
                 else:
-                    player.weapon="spread"
+                    if player.hp >= 100:
+                        player.homing_combo = True
+                try:
+                    delattr(player, "fallback_single")
+                except Exception:
+                    pass
             elif p.kind=="shield":
                 player.shield = 300
             else:
