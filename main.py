@@ -791,7 +791,7 @@ def draw_bg():
             except Exception:
                 bg_offset = 0
             try:
-                ctx.drawImage(bg_offscreen, 0, -bg_offset, canvas.width, _bg_offscreen_height)
+                ctx.drawImage(bg_offscreen, 0, bg_offset - canvas.height, canvas.width, _bg_offscreen_height)
                 return
             except Exception:
                 pass
@@ -814,7 +814,7 @@ def draw_bg():
                 bg_offset = (bg_offset + speed) % canvas.height
             except Exception:
                 bg_offset = 0
-            y = -bg_offset
+            y = bg_offset - canvas.height
             idx = 0
             while y < canvas.height:
                 img = imgs[idx % len(imgs)]
