@@ -101,6 +101,8 @@ except Exception:
 hud = document.getElementById("hud")
 score_el = document.getElementById("score")
 lives_el = document.getElementById("lives")
+life_fill_el = document.getElementById("life-fill")
+life_text_el = document.getElementById("life-text")
 level_el = document.getElementById("level")
 
 # Menu elements
@@ -174,7 +176,10 @@ SPRITES = {
     "player_purple":f"{IMG_BASE}/purple_plane.png",
     "enemy_small":  f"{IMG_BASE}/small_enemy.png",
     "enemy_big":    f"{IMG_BASE}/big_enemy.png",
+    "enemy_medium": f"{IMG_BASE}/middle_enemy.png",
     "boss":         f"{IMG_BASE}/boss_enemy.png",
+    "boss_crazy":   f"{IMG_BASE}/bossplane_crazy.png",
+    "boss_bomb":    f"{IMG_BASE}/bossplane_bomb.png",
     "bullet_red":   f"{IMG_BASE}/red_bullet.png",
     "bullet_blue":  f"{IMG_BASE}/blue_bullet.png",
     "enemy_bullet": f"{IMG_BASE}/big_enemy_bullet.png",
@@ -346,17 +351,17 @@ class Player:
 class Enemy:
     def __init__(self, kind="small"):
         self.kind = kind
-        self.w = 36 if kind=="small" else 64
-        self.h = 36 if kind=="small" else 64
+        self.w = 36 if kind=="small" else (64 if kind=="big" else 48)
+        self.h = 36 if kind=="small" else (64 if kind=="big" else 48)
         self.x = randf(0, canvas.width-self.w)
         self.y = -self.h - randf(0, 100)
         spd_min, spd_max = DIFF[selected_diff]["enemy_speed"]
         self.vx = randf(-0.6, 0.6)
         self.vy = randf(spd_min, spd_max)
-        self.hp = 15 if kind=="small" else 40
+        self.hp = 15 if kind=="small" else (40 if kind=="big" else 28)
         self.cd = 40  # shoot cooldown
     def draw(self):
-        key = "enemy_small" if self.kind=="small" else "enemy_big"
+        key = "enemy_small" if self.kind=="small" else ("enemy_big" if self.kind=="big" else "enemy_medium")
         img = SPRITES.get(key)
         if img:
             ctx.drawImage(img, self.x, self.y, self.w, self.h)
@@ -390,11 +395,13 @@ class Boss:
         self.x = canvas.width/2 - self.w/2
         self.y = -self.h
         self.vy = 1.2
+        self.vx = 2.0
         self.hp = DIFF[selected_diff]["boss_hp"]
         self.phase = 0
         self.cd = 120
     def draw(self):
-        img = SPRITES.get("boss")
+        key = "boss_crazy" if getattr(self, "phase", 0) == 2 and SPRITES.get("boss_crazy") else "boss"
+        img = SPRITES.get(key)
         if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
         else:
             ctx.fillStyle = "#5522aa"
@@ -406,8 +413,16 @@ class Boss:
         ratio = max(0, self.hp)/DIFF[selected_diff]["boss_hp"]
         ctx.fillRect(20, 20, (canvas.width-40)*ratio, 12)
     def update(self):
+        # Enter from top, then patrol horizontally at y=40
         if self.y < 40:
             self.y += self.vy
+        else:
+            # Horizontal patrol & edge bounce
+            self.x += self.vx
+            if self.x <= 0 or self.x + self.w >= canvas.width:
+                self.vx = -self.vx
+                self.x = clamp(self.x, 0, canvas.width - self.w)
+        # Shoot pattern cycling
         self.cd -= 1
         if self.cd<=0:
             self.cd = 80
@@ -516,11 +531,22 @@ def rects_collide(a, b):
 
 def update_hud():
     score_el.innerText = f"分数：{int(score)}"
-    lives_el.innerText = f"生命：{player.hp}"
+    try:
+        hp = int(max(0, min(100, player.hp)))
+        if life_fill_el:
+            life_fill_el.style.width = f"{hp}%"
+        if life_text_el:
+            life_text_el.innerText = str(hp)
+    except Exception:
+        try:
+            lives_el.innerText = f"生命：{player.hp}"
+        except Exception:
+            pass
     level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}"
 
 def spawn_enemy():
-    kind = "small" if Math.random() < 0.7 else "big"
+    r = Math.random()
+    kind = "small" if r < 0.55 else ("medium" if r < 0.85 else "big")
     enemies.append(Enemy(kind))
 
 def spawn_power(x, y):
