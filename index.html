@@ -105,6 +105,7 @@
       const menu = document.getElementById('menu');
       const diffBtns = document.querySelectorAll('#diff-buttons button');
       let selected = 'normal';
+      window.__desiredDifficulty = selected;
 
       diffBtns.forEach(btn => {
         btn.addEventListener('click', function () {
