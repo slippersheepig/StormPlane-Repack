@@ -40,7 +40,9 @@ jobs:
             echo "current=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          CURRENT=$(grep -oP 'pyodide/v\\K[0-9]+\\.[0-9]+\\.[0-9]+' index.html | head -n1 || true)
+          CURRENT=$(grep -oP 'pyodide/v[0-9]+\.[0-9]+\.[0-9]+/full/pyodide.js' index.html \
+            | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' \
+            | head -n1 || true)
           echo "Current: ${CURRENT:-<none>}"
           echo "current=${CURRENT}" >> $GITHUB_OUTPUT
 
@@ -51,7 +53,7 @@ jobs:
           LATEST: ${{ steps.get_latest.outputs.tag }}
         run: |
           echo "Updating index.html to ${LATEST} ..."
-          sed -i -E "s@pyodide/v[0-9]+\\.[0-9]+\\.[0-9]+/full/pyodide.js@pyodide/${LATEST}/full/pyodide.js@g" index.html
+          sed -i -E "s@(pyodide/)v[0-9]+\.[0-9]+\.[0-9]+(/full/pyodide.js)@\1${LATEST}\2@g" index.html
           echo "Done."
 
       - name: Commit change (only if there is a diff)
