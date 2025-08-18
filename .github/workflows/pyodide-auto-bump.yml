@@ -2,7 +2,7 @@ name: Auto-bump Pyodide & Rebuild Image
 
 on:
   schedule:
-    - cron: 8 1 * * *
+    - cron: 8 0 * * *
   workflow_dispatch:
 
 permissions:
