@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   bump-and-build:
@@ -51,12 +52,32 @@ jobs:
         env:
           LATEST: ${{ steps.get_latest.outputs.tag }}
         run: |
-          echo "Updating index.html to ${LATEST} ..."
-          sed -i -E "s@(pyodide/)v[0-9]+\.[0-9]+\.[0-9]+(/full/pyodide.js)@\1${LATEST}\2@g" index.html
+          # Ensure the tag starts with 'v' and replace both v? patterns in index.html
+          LATEST_TAG="${LATEST}"
+          if [ -n "$LATEST_TAG" ] && [ "${LATEST_TAG#v}" = "$LATEST_TAG" ]; then
+            LATEST_TAG="v${LATEST_TAG}"
+          fi
+          echo "Updating index.html to ${LATEST_TAG} ..."
+          sed -i -E "s@(pyodide/)v?[0-9]+\.[0-9]+\.[0-9]+(/full/pyodide.js)@\1${LATEST_TAG}\2@g" index.html
           echo "Done."
 
       - name: Commit change (only if there is a diff)
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore(ci): bump Pyodide to ${{ steps.get_latest.outputs.tag }} [skip ci]"
+          commit_message: "chore(ci): bump Pyodide to ${{ steps.get_latest.outputs.tag }}"
           file_pattern: index.html
+
+      - name: Trigger Docker workflows
+        if: steps.read_current.outputs.current != steps.get_latest.outputs.tag && steps.read_current.outputs.current != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Dispatching docker-image.yml and docker-publish.yml ..."
+          curl -L -X POST -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-image.yml/dispatches \
+            -d '{"ref":"main"}'
+          curl -L -X POST -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-publish.yml/dispatches \
+            -d '{"ref":"main"}'
