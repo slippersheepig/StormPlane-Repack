@@ -128,7 +128,7 @@ state = "menu"  # 'menu' -> 'playing' -> 'gameover'
 
 # Difficulty settings
 DIFF = {
-    "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200}
+    "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200},
 
 # --- Dynamic difficulty scaling (based on current score) ---
 # regardless of the initially selected difficulty.
