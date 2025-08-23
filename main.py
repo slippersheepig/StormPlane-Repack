@@ -129,6 +129,9 @@ state = "menu"  # 'menu' -> 'playing' -> 'gameover'
 # Difficulty settings
 DIFF = {
     "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200},
+    "normal": {"enemy_rate": 0.022, "enemy_speed": (1.8,2.8), "bullet_rate": 0.008, "boss_hp": 1800},
+    "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
+}
 
 # --- Dynamic difficulty scaling (based on current score) ---
 # regardless of the initially selected difficulty.
@@ -178,10 +181,7 @@ class _DiffProxy:
 # Replace static DIFF with proxy (keep original as _BASE_DIFF in case you need it)
 _BASE_DIFF = DIFF
 DIFF = _DiffProxy(_BASE_DIFF)
-,
-    "normal": {"enemy_rate": 0.022, "enemy_speed": (1.8,2.8), "bullet_rate": 0.008, "boss_hp": 1800},
-    "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
-}
+
 DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
 WEAPON_TIERS = ("single", "twin", "spread")
 TIER_TO_SPRITE = {
