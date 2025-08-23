@@ -131,9 +131,8 @@ DIFF = {
     "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200}
 
 # --- Dynamic difficulty scaling (based on current score) ---
-# We wrap DIFF with a proxy that scales parameters as the player's score increases,
 # regardless of the initially selected difficulty.
-_DIFFICULTY_THRESHOLDS = [200, 600, 1200, 2000, 3000, 4500, 6000, 8000, 10500]
+_DIFFICULTY_THRESHOLDS = [2000, 6000, 12000, 20000, 30000, 45000, 60000, 80000, 105000]
 
 def _difficulty_tier(sc):
     t = 0
@@ -231,7 +230,7 @@ def _to_img(path):
 
 # 首选命名
 SPRITES = {
-        "player_blue":  f"{IMG_BASE}/blue_plane.png",
+    "player_blue":  f"{IMG_BASE}/blue_plane.png",
     "player_red":   f"{IMG_BASE}/red_plane.png",
     "player_purple":f"{IMG_BASE}/purple_plane.png",
     "enemy_small":  f"{IMG_BASE}/small_enemy.png",
@@ -372,7 +371,6 @@ def build_bg_offscreen():
             pass
 
 build_bg_offscreen()
-
 
 SOUNDS = {
     "shoot":  f"{SND_BASE}/shoot.mp3",
@@ -866,7 +864,6 @@ spawn_boss_at = 500  # score threshold
 
 keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
 
-
 def draw_bg():
     global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
     try:
@@ -903,8 +900,6 @@ def draw_bg():
             ctx.fillRect(0,0,canvas.width,canvas.height)
         except Exception:
             pass
-
-
 
 def update():
     global frame, score, game_over, shake, boss, spawn_boss_at
