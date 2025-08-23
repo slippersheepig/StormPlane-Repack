@@ -293,7 +293,6 @@ bg_offscreen = None
 _bg_offscreen_width = 0
 _bg_offscreen_height = 0
 
-
 def build_bg_offscreen():
     """Build a tall offscreen canvas (2x screen height) with a procedurally generated dark starfield."""
     global bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
