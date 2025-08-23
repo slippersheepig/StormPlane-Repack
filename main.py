@@ -128,7 +128,58 @@ state = "menu"  # 'menu' -> 'playing' -> 'gameover'
 
 # Difficulty settings
 DIFF = {
-    "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200},
+    "easy":   {"enemy_rate": 0.015, "enemy_speed": (1.0,2.0), "bullet_rate": 0.004, "boss_hp": 1200}
+
+# --- Dynamic difficulty scaling (based on current score) ---
+# We wrap DIFF with a proxy that scales parameters as the player's score increases,
+# regardless of the initially selected difficulty.
+_DIFFICULTY_THRESHOLDS = [200, 600, 1200, 2000, 3000, 4500, 6000, 8000, 10500]
+
+def _difficulty_tier(sc):
+    t = 0
+    for th in _DIFFICULTY_THRESHOLDS:
+        if sc >= th:
+            t += 1
+        else:
+            break
+    return t
+
+def _scale_param(key, value, tier):
+    # gentle but noticeable scaling; capped to keep the game fair
+    if key == "enemy_rate":
+        return min(value * (1 + 0.12 * tier), 0.09)
+    if key == "enemy_speed":
+        a, b = value
+        mul = 1 + 0.08 * tier
+        return (a * mul, b * mul)
+    if key == "bullet_rate":
+        return min(value * (1 + 0.10 * tier), 0.06)
+    if key == "boss_hp":
+        # Make later bosses tougher
+        return int(value * (1 + 0.18 * tier))
+    return value
+
+class _ParamView:
+    def __init__(self, base):
+        self._base = base
+    def __getitem__(self, k):
+        try:
+            sc = score
+        except Exception:
+            sc = 0
+        tier = _difficulty_tier(int(sc))
+        return _scale_param(k, self._base[k], tier)
+
+class _DiffProxy:
+    def __init__(self, base):
+        self._base = base
+    def __getitem__(self, name):
+        return _ParamView(self._base[name])
+
+# Replace static DIFF with proxy (keep original as _BASE_DIFF in case you need it)
+_BASE_DIFF = DIFF
+DIFF = _DiffProxy(_BASE_DIFF)
+,
     "normal": {"enemy_rate": 0.022, "enemy_speed": (1.8,2.8), "bullet_rate": 0.008, "boss_hp": 1800},
     "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
 }
@@ -180,9 +231,7 @@ def _to_img(path):
 
 # 首选命名
 SPRITES = {
-    "bg_01":        f"{IMG_BASE}/bg_01.jpg",
-    "bg_02":        f"{IMG_BASE}/bg_02.jpg",
-    "player_blue":  f"{IMG_BASE}/blue_plane.png",
+        "player_blue":  f"{IMG_BASE}/blue_plane.png",
     "player_red":   f"{IMG_BASE}/red_plane.png",
     "player_purple":f"{IMG_BASE}/purple_plane.png",
     "enemy_small":  f"{IMG_BASE}/small_enemy.png",
@@ -245,40 +294,74 @@ bg_offscreen = None
 _bg_offscreen_width = 0
 _bg_offscreen_height = 0
 
+
 def build_bg_offscreen():
+    """Build a tall offscreen canvas (2x screen height) with a procedurally generated dark starfield."""
     global bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
     try:
-        img1 = SPRITES.get("bg_01")
-        img2 = SPRITES.get("bg_02")
-    except Exception:
-        img1 = None
-        img2 = None
-
-    try:
-        ready1 = bool(img1 and getattr(img1, "complete", False) and getattr(img1, "naturalWidth", 0) > 0)
-    except Exception:
-        ready1 = False
-    try:
-        ready2 = bool(img2 and getattr(img2, "complete", False) and getattr(img2, "naturalWidth", 0) > 0)
-    except Exception:
-        ready2 = False
-
-    if not (ready1 and ready2 and canvas and ctx):
-        try:
-            window.setTimeout(create_proxy(build_bg_offscreen), 300)
-        except Exception:
-            pass
-        return
-
-    try:
-        w = int(Math.floor(canvas.width))
-        h = int(Math.floor(canvas.height))
+        w = int(Math.floor(canvas.width)) or 1
+        h = int(Math.floor(canvas.height)) or 1
         off = document.createElement("canvas")
         off.width = w
         off.height = h * 2
         offctx = off.getContext("2d")
-        offctx.drawImage(img1, 0, 0, w, h)
-        offctx.drawImage(img2, 0, h, w, h)
+
+        # Background: deep space gradient
+        try:
+            g = offctx.createLinearGradient(0, 0, 0, off.height)
+            g.addColorStop(0, "#03050a")
+            g.addColorStop(1, "#000000")
+            offctx.fillStyle = g
+        except Exception:
+            offctx.fillStyle = "#000"
+        offctx.fillRect(0, 0, off.width, off.height)
+
+        # Star layers (parallax baked into scroll)
+        import math as _py_math
+        def _lay(count, minr, maxr, alpha_min, alpha_max):
+            for i in range(count):
+                x = Math.floor(Math.random() * w)
+                y = Math.floor(Math.random() * (h * 2))
+                r = randf(minr, maxr)
+                a = randf(alpha_min, alpha_max)
+                try:
+                    offctx.beginPath()
+                    offctx.globalAlpha = a
+                    offctx.arc(x, y, r, 0, Math.PI * 2)
+                    offctx.fillStyle = "#ffffff"
+                    offctx.fill()
+                except Exception:
+                    # Fallback tiny pixel
+                    offctx.globalAlpha = a
+                    offctx.fillStyle = "#ffffff"
+                    offctx.fillRect(x, y, 1, 1)
+            offctx.globalAlpha = 1.0
+
+        area = w * h
+        # Densities scale with area to keep similar feel across screens
+        _lay(max(80, int(area / 4500)), 0.6, 1.2, 0.35, 0.7)   # distant faint stars
+        _lay(max(40, int(area / 9000)), 1.0, 1.8, 0.6, 0.9)    # mid stars
+        _lay(max(16, int(area / 15000)), 1.6, 2.4, 0.8, 1.0)   # near bright stars
+
+        # Occasional soft nebula swirls
+        try:
+            for _ in range(max(1, int(area / 220000))):
+                cx = randf(0, w); cy = randf(0, h * 2)
+                rx = randf(120, 240); ry = randf(60, 140)
+                offctx.save()
+                offctx.translate(cx, cy)
+                offctx.rotate(randf(0, Math.PI))
+                grd = offctx.createRadialGradient(0,0,0, 0,0, max(rx, ry))
+                grd.addColorStop(0.0, "rgba(30,60,120,0.12)")
+                grd.addColorStop(1.0, "rgba(0,0,0,0)")
+                offctx.fillStyle = grd
+                offctx.beginPath()
+                offctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
+                offctx.fill()
+                offctx.restore()
+        except Exception:
+            pass
+
         bg_offscreen = off
         _bg_offscreen_width = off.width
         _bg_offscreen_height = off.height
@@ -289,6 +372,7 @@ def build_bg_offscreen():
             pass
 
 build_bg_offscreen()
+
 
 SOUNDS = {
     "shoot":  f"{SND_BASE}/shoot.mp3",
@@ -600,7 +684,7 @@ def rects_collide(a, b):
 def update_hud():
     score_el.innerText = f"分数：{int(score)}"
     lives_el.innerText = f"生命：{player.hp}"
-    level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}"
+    level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}｜动态+{_difficulty_tier(int(score))}"
 
 def spawn_enemy():
     r = Math.random()
@@ -782,9 +866,11 @@ spawn_boss_at = 500  # score threshold
 
 keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
 
+
 def draw_bg():
     global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
     try:
+        # Use the pre-rendered starfield if ready
         if bg_offscreen and _bg_offscreen_width == canvas.width and _bg_offscreen_height == canvas.height * 2:
             speed = 1.0
             try:
@@ -796,43 +882,19 @@ def draw_bg():
                 return
             except Exception:
                 pass
-        else:
-            try:
-                build_bg_offscreen()
-            except Exception:
-                pass
-
+        # Rebuild if size changed or not ready yet
         try:
-            img1 = SPRITES.get("bg_01")
-            img2 = SPRITES.get("bg_02")
+            build_bg_offscreen()
         except Exception:
-            img1 = None
-            img2 = None
-        imgs = [i for i in (img1, img2) if i]
-        if imgs and canvas and ctx:
-            speed = 1.0
-            try:
-                bg_offset = (bg_offset + speed) % canvas.height
-            except Exception:
-                bg_offset = 0
-            y = bg_offset - canvas.height
-            idx = 0
-            while y < canvas.height:
-                img = imgs[idx % len(imgs)]
-                try:
-                    ctx.drawImage(img, 0, y, canvas.width, canvas.height)
-                except Exception:
-                    break
-                y += canvas.height
-                idx += 1
-            return
+            pass
     except Exception:
         pass
 
+    # Fallback: simple dark gradient fill
     try:
         g = ctx.createLinearGradient(0,0,0,canvas.height)
-        g.addColorStop(0, "#f0f4ff")
-        g.addColorStop(1, "#c9e6ff")
+        g.addColorStop(0, "#05070d")
+        g.addColorStop(1, "#000000")
         ctx.fillStyle = g
         ctx.fillRect(0,0,canvas.width,canvas.height)
     except Exception:
@@ -841,6 +903,8 @@ def draw_bg():
             ctx.fillRect(0,0,canvas.width,canvas.height)
         except Exception:
             pass
+
+
 
 def update():
     global frame, score, game_over, shake, boss, spawn_boss_at
