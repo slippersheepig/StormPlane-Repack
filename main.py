@@ -304,14 +304,11 @@ def build_bg_offscreen():
         off.height = h * 2
         offctx = off.getContext("2d")
 
-        # Background: deep space gradient
+        # Background: flat black to avoid visible brightness banding when wrapping
         try:
-            g = offctx.createLinearGradient(0, 0, 0, off.height)
-            g.addColorStop(0, "#03050a")
-            g.addColorStop(1, "#000000")
-            offctx.fillStyle = g
+            offctx.fillStyle = "#000000"
         except Exception:
-            offctx.fillStyle = "#000"
+            pass
         offctx.fillRect(0, 0, off.width, off.height)
 
         # Star layers (parallax baked into scroll)
@@ -341,24 +338,24 @@ def build_bg_offscreen():
         _lay(max(18,  int(area / 22000)), 1.0, 1.8, 0.6,  0.9)   # mid stars
         _lay(max(7,   int(area / 36000)), 1.6, 2.4, 0.8,  1.0)   # near bright stars
 
-        # Occasional soft nebula swirls
-        try:
-            for _ in range(max(1, int(area / 220000))):
-                cx = randf(0, w); cy = randf(0, h * 2)
-                rx = randf(120, 240); ry = randf(60, 140)
-                offctx.save()
-                offctx.translate(cx, cy)
-                offctx.rotate(randf(0, Math.PI))
-                grd = offctx.createRadialGradient(0,0,0, 0,0, max(rx, ry))
-                grd.addColorStop(0.0, "rgba(30,60,120,0.12)")
-                grd.addColorStop(1.0, "rgba(0,0,0,0)")
-                offctx.fillStyle = grd
-                offctx.beginPath()
-                offctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
-                offctx.fill()
-                offctx.restore()
-        except Exception:
-            pass
+        # (Disabled) nebula swirls removed to keep background luminance stable and avoid perceived "reset"
+        # try:
+        #     for _ in range(max(1, int(area / 220000))):
+        #         cx = randf(0, w); cy = randf(0, h * 2)
+        #         rx = randf(120, 240); ry = randf(60, 140)
+        #         offctx.save()
+        #         offctx.translate(cx, cy)
+        #         offctx.rotate(randf(0, Math.PI))
+        #         grd = offctx.createRadialGradient(0,0,0, 0,0, max(rx, ry))
+        #         grd.addColorStop(0.0, "rgba(30,60,120,0.12)")
+        #         grd.addColorStop(1.0, "rgba(0,0,0,0)")
+        #         offctx.fillStyle = grd
+        #         offctx.beginPath()
+        #         offctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
+        #         offctx.fill()
+        #         offctx.restore()
+        # except Exception:
+        #     pass
 
         bg_offscreen = off
         _bg_offscreen_width = off.width
@@ -895,19 +892,12 @@ def draw_bg():
     except Exception:
         pass
 
-    # Fallback: simple dark gradient fill
+    # Fallback: flat black fill to avoid banding
     try:
-        g = ctx.createLinearGradient(0,0,0,canvas.height)
-        g.addColorStop(0, "#05070d")
-        g.addColorStop(1, "#000000")
-        ctx.fillStyle = g
+        ctx.fillStyle = "#000000"
         ctx.fillRect(0,0,canvas.width,canvas.height)
     except Exception:
-        try:
-            ctx.fillStyle = "#000"
-            ctx.fillRect(0,0,canvas.width,canvas.height)
-        except Exception:
-            pass
+        pass
 
 def update():
     global frame, score, game_over, shake, boss, spawn_boss_at
