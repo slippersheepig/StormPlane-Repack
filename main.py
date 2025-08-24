@@ -337,9 +337,9 @@ def build_bg_offscreen():
 
         area = w * h
         # Densities scale with area to keep similar feel across screens
-        _lay(max(80, int(area / 4500)), 0.6, 1.2, 0.35, 0.7)   # distant faint stars
-        _lay(max(40, int(area / 9000)), 1.0, 1.8, 0.6, 0.9)    # mid stars
-        _lay(max(16, int(area / 15000)), 1.6, 2.4, 0.8, 1.0)   # near bright stars
+        _lay(max(35,  int(area / 11000)), 0.6, 1.2, 0.35, 0.7)   # distant faint stars
+        _lay(max(18,  int(area / 22000)), 1.0, 1.8, 0.6,  0.9)   # mid stars
+        _lay(max(7,   int(area / 36000)), 1.6, 2.4, 0.8,  1.0)   # near bright stars
 
         # Occasional soft nebula swirls
         try:
@@ -435,10 +435,10 @@ class Player:
         if self.weapon == "single":
             bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player"))
         elif self.weapon == "twin":
-            bullets.append(Bullet(self.x + 6, self.y - 10, 0, -8, "player"))
-            bullets.append(Bullet(self.x + self.w - 12, self.y - 10, 0, -8, "player"))
-        elif self.weapon == "spread":
             for dx, dy in [(-2, -8), (0, -9), (2, -8)]:
+                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player"))
+        elif self.weapon == "spread":
+            for dx, dy in [(-3, -7.5), (-1.5, -8.5), (0, -9.2), (1.5, -8.5), (3, -7.5)]:
                 bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player"))
     def hit(self, dmg):
         if self.shield > 0:
@@ -870,19 +870,28 @@ def draw_bg():
         if bg_offscreen and _bg_offscreen_width == canvas.width and _bg_offscreen_height == canvas.height * 2:
             speed = 1.0
             try:
-                bg_offset = (bg_offset + speed) % canvas.height
+                # Scroll over the full offscreen height for seamless wrap
+                bg_offset = (bg_offset + speed) % _bg_offscreen_height
             except Exception:
                 bg_offset = 0
             try:
-                ctx.drawImage(bg_offscreen, 0, bg_offset - canvas.height, canvas.width, _bg_offscreen_height)
+                # draw twice for smooth infinite scroll without visible reset
+                y = bg_offset - _bg_offscreen_height
+                ctx.drawImage(bg_offscreen, 0, y, canvas.width, _bg_offscreen_height)
+                ctx.drawImage(bg_offscreen, 0, y + _bg_offscreen_height, canvas.width, _bg_offscreen_height)
                 return
             except Exception:
                 pass
         # Rebuild if size changed or not ready yet
-        try:
+        if not bg_offscreen or _bg_offscreen_width != canvas.width or _bg_offscreen_height != canvas.height * 2:
             build_bg_offscreen()
-        except Exception:
-            pass
+            # draw once immediately if possible
+            if bg_offscreen:
+                try:
+                    ctx.drawImage(bg_offscreen, 0, -canvas.height, canvas.width, _bg_offscreen_height)
+                    return
+                except Exception:
+                    pass
     except Exception:
         pass
 
