@@ -38,3 +38,5 @@ jobs:
             linux/riscv64
           push: true
           tags: sheepgreen/stormplane:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
