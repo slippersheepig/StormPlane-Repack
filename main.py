@@ -125,6 +125,7 @@ diff_buttons.item(1).classList.add("active")  # normal default
 
 game_over = False
 state = "menu"  # 'menu' -> 'playing' -> 'gameover'
+INITIAL_BOSS_SCORE_THRESHOLD = 500
 
 # Difficulty settings
 DIFF = {
@@ -690,7 +691,7 @@ def spawn_power(x, y):
     kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
     powers.append(PowerUp(kind, x, y))
 
-spawn_boss_at = 10000  # 初始触发大Boss的分数阈值
+spawn_boss_at = INITIAL_BOSS_SCORE_THRESHOLD
 boss = None
 
 def maybe_spawn_boss():
@@ -699,7 +700,7 @@ def maybe_spawn_boss():
         boss = Boss()
 
 def reset_game():
-    global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake
+    global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake, spawn_boss_at
     player = Player()
     _apply_tier_sprite(player)
     try:
@@ -712,6 +713,7 @@ def reset_game():
     score = 0
     frame = 0
     shake = 0
+    spawn_boss_at = INITIAL_BOSS_SCORE_THRESHOLD
     game_over = False
 
 # Touch controls: drag to move, tap to shoot
@@ -856,9 +858,20 @@ score = 0
 frame = 0
 bg_offset = 0
 shake = 0
-spawn_boss_at = 500  # score threshold
-
 keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
+
+PLAYER_HIT_RADIUS = 12
+
+def _obj_center(obj):
+    w = getattr(obj, 'w', getattr(obj, 'width', 0))
+    h = getattr(obj, 'h', getattr(obj, 'height', 0))
+    return obj.x + w / 2, obj.y + h / 2
+
+def player_center_hit(obj, radius=PLAYER_HIT_RADIUS):
+    px, py = _obj_center(player)
+    ox, oy = _obj_center(obj)
+    dx, dy = ox - px, oy - py
+    return dx*dx + dy*dy <= radius*radius
 
 def draw_bg():
     global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
@@ -955,19 +968,7 @@ def update():
         p.update()
         p.draw()
         if p.y > canvas.height+40:
-            powers.remove(p)
-
-    # —— 我方中心判定半径（可按需要微调，像素）——
-    PLAYER_HIT_RADIUS = 12
-    def _cx(obj):
-        return obj.x + (getattr(obj, 'w', getattr(obj, 'width', 0))) / 2
-    def _cy(obj):
-        return obj.y + (getattr(obj, 'h', getattr(obj, 'height', 0))) / 2
-    def player_center_hit(obj, radius=PLAYER_HIT_RADIUS):
-        px, py = _cx(player), _cy(player)
-        ox, oy = _cx(obj), _cy(obj)
-        dx, dy = ox - px, oy - py
-        return dx*dx + dy*dy <= radius*radius
+            safe_remove(powers, p)
     
     # Collisions
     for b in [bb for bb in bullets if bb.owner=="player"]:
