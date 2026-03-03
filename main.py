@@ -185,6 +185,8 @@ DIFF = _DiffProxy(_BASE_DIFF)
 
 DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
 WEAPON_TIERS = ("single", "twin", "spread")
+CLEAR_WAVE_DURATION = 60 * 5
+CLEAR_WAVE_PULSE_GAP = 12
 TIER_TO_SPRITE = {
     "single": "player_blue",
     "twin":   "player_red",
@@ -404,6 +406,8 @@ class Player:
         self.shoot_cd = 0
         self.shield = 0  # frames
         self.homing_combo = False
+        self.clear_wave_timer = 0
+        self.clear_wave_pulse_cd = 0
     def draw(self):
         img = SPRITES.get(self.sprite_key)
         if img:
@@ -691,6 +695,50 @@ def spawn_power(x, y):
     kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
     powers.append(PowerUp(kind, x, y))
 
+def trigger_clear_wave():
+    player.clear_wave_timer = CLEAR_WAVE_DURATION
+    player.clear_wave_pulse_cd = 0
+
+def _defeat_boss():
+    global boss, score, spawn_boss_at
+    score += 300
+    effects.append(Explosion(boss.x+boss.w/2, boss.y+boss.h/2))
+    play_sound("bigboom", 0.6)
+    boss = None
+    try:
+        spawn_boss_at = score + 1000
+    except Exception:
+        pass
+
+def run_clear_wave():
+    global shake, score
+    if player.clear_wave_timer <= 0:
+        return
+    player.clear_wave_timer -= 1
+    player.clear_wave_pulse_cd -= 1
+    if player.clear_wave_pulse_cd > 0:
+        return
+
+    player.clear_wave_pulse_cd = CLEAR_WAVE_PULSE_GAP
+    shake = max(shake, 12)
+    play_sound("boom3", 0.18)
+
+    for e in enemies[:]:
+        effects.append(Explosion(e.x + e.w/2, e.y + e.h/2))
+        score_gain = 10 if e.kind == "small" else 25
+        score += score_gain
+        safe_remove(enemies, e)
+
+    for eb in [bb for bb in bullets if bb.owner == "enemy"]:
+        effects.append(Explosion(eb.x + eb.w/2, eb.y + eb.h/2))
+        safe_remove(bullets, eb)
+
+    if boss:
+        boss.hp -= 90
+        score += 10
+        if boss.hp <= 0:
+            _defeat_boss()
+
 spawn_boss_at = INITIAL_BOSS_SCORE_THRESHOLD
 boss = None
 
@@ -933,6 +981,7 @@ def update():
         player.shoot_cd -= 1
     if player.shield > 0:
         player.shield -= 1
+    run_clear_wave()
 
     maybe_spawn_boss()
     if boss:
@@ -996,14 +1045,7 @@ def update():
             score += 2
 
             if boss.hp <= 0:
-                score += 300
-                effects.append(Explosion(boss.x+boss.w/2, boss.y+boss.h/2))
-                play_sound("bigboom", 0.6)  # optional big explosion
-                boss = None
-                try:
-                    spawn_boss_at = score + 1000
-                except Exception:
-                    pass
+                _defeat_boss()
 
     # Enemy bullets vs player
     for b in [bb for bb in bullets if bb.owner=="enemy"]:
@@ -1041,8 +1083,7 @@ def update():
                     player.weapon = "spread"
                     _apply_tier_sprite(player)
                 else:
-                    if player.hp >= 100:
-                        player.homing_combo = True
+                    trigger_clear_wave()
                 try:
                     delattr(player, "fallback_single")
                 except Exception:
@@ -1055,6 +1096,17 @@ def update():
 
     # Draw player last
     player.draw()
+
+    if player.clear_wave_timer > 0:
+        alpha = 0.12 + 0.1 * Math.sin(frame * 0.35)
+        radius = 80 + 20 * Math.sin(frame * 0.25)
+        ctx.save()
+        ctx.strokeStyle = f"rgba(120,220,255,{alpha})"
+        ctx.lineWidth = 4
+        ctx.beginPath()
+        ctx.arc(player.x + player.w/2, player.y + player.h/2, radius, 0, Math.PI*2)
+        ctx.stroke()
+        ctx.restore()
 
     # Effects
     for fx in effects[:]:
