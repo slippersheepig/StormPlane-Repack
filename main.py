@@ -408,6 +408,7 @@ class Player:
         self.homing_combo = False
         self.clear_wave_timer = 0
         self.clear_wave_pulse_cd = 0
+        self.alt_fire_cycle = 0
     def draw(self):
         img = SPRITES.get(self.sprite_key)
         if img:
@@ -430,18 +431,26 @@ class Player:
             return
         self.shoot_cd = 10
         play_sound("shoot", 0.25)
+        self.alt_fire_cycle = (self.alt_fire_cycle + 1) % 8
+
         if self.homing_combo:
-            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player"))
-            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 12, 0, -6, "player", homing=True))
+            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player", bullet_type="normal", damage=14))
+            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 12, 0, -6, "player", bullet_type="homing", homing=True, damage=16))
             return
+
+        # 每隔几轮发射一次高能激光弹，增加玩法层次但不打破基础节奏
+        if self.weapon != "single" and self.alt_fire_cycle == 0:
+            bullets.append(Bullet(self.x + self.w/2 - 4, self.y - 20, 0, -12, "player", bullet_type="laser", w=8, h=30, damage=30, ttl=24))
+            return
+
         if self.weapon == "single":
-            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player"))
+            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player", bullet_type="normal", damage=16))
         elif self.weapon == "twin":
             for dx, dy in [(-2, -8), (0, -9), (2, -8)]:
-                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player"))
+                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player", bullet_type="normal", damage=14))
         elif self.weapon == "spread":
             for dx, dy in [(-3, -7.5), (-1.5, -8.5), (0, -9.2), (1.5, -8.5), (3, -7.5)]:
-                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player"))
+                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, dx, dy, "player", bullet_type="normal", damage=12))
     def hit(self, dmg):
         if self.shield > 0:
             self.shield = max(0, self.shield - int(dmg * 20))
@@ -499,7 +508,16 @@ class Enemy:
                 vy = ty - cy
                 mag = (vx*vx+vy*vy) ** 0.5 + 1e-5
                 vx, vy = vx/mag*3.0, vy/mag*3.0
-                bullets.append(Bullet(cx-3, cy, vx, vy, "enemy"))
+                if self.kind == "small":
+                    bullets.append(Bullet(cx-3, cy, vx, vy, "enemy", bullet_type="normal", damage=14))
+                elif self.kind == "medium":
+                    for off in (-0.35, 0, 0.35):
+                        ang = Math.atan2(vy, vx) + off
+                        bullets.append(Bullet(cx-3, cy, 3.0*Math.cos(ang), 3.0*Math.sin(ang), "enemy", bullet_type="normal", sprite_key="boss_bullet_triangle", damage=12))
+                else:
+                    bullets.append(Bullet(cx-4, cy, vx*0.85, vy*0.85+0.3, "enemy", bullet_type="orb", sprite_key="boss_bullet_hellfire_yellow", w=10, h=10, damage=18))
+                    if Math.random() < 0.35:
+                        bullets.append(Bullet(cx-4, cy, vx*0.6, vy*0.6, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_red", w=10, h=10, damage=16, homing=True, speed=3.2, turn_rate=0.2))
 
 class Boss:
     def __init__(self):
@@ -512,6 +530,7 @@ class Boss:
         self.hp = DIFF[selected_diff]["boss_hp"]
         self.phase = 0
         self.cd = 120
+        self.pattern_count = 0
     def draw(self):
         key = "boss_crazy" if getattr(self, "phase", 0) == 2 and SPRITES.get("boss_crazy") else "boss"
         img = SPRITES.get(key)
@@ -538,8 +557,9 @@ class Boss:
         # Shoot pattern cycling
         self.cd -= 1
         if self.cd<=0:
-            self.cd = 80
-            self.phase = (self.phase+1) % 3
+            self.pattern_count += 1
+            self.cd = max(52, 80 - self.pattern_count)
+            self.phase = (self.phase+1) % 4
             self.fire_pattern(self.phase)
     def fire_pattern(self, p):
         cx = self.x + self.w/2
@@ -557,28 +577,51 @@ class Boss:
                 ang = Math.atan2(ty-cy, tx-cx) + (k-6)*0.08
                 vx, vy = 3.2*Math.cos(ang), 3.2*Math.sin(ang)
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key=("boss_bullet_thunderball_red" if (k % 2 == 0) else "boss_bullet_thunderball_green")))
-        else:
+        elif p == 2:
             # spiral
             for k in range(24):
                 ang = k*0.26 + Math.random()*0.5
                 vx, vy = 2.6*Math.cos(ang), 2.6*Math.sin(ang)+0.8
-                bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_sun_particle"))
+                bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_sun_particle", bullet_type="orb", damage=14))
+        else:
+            # 混合弹幕：中轴激光 + 两侧追踪弹
+            for lane in (-42, -18, 18, 42):
+                bullets.append(Bullet(cx + lane, cy, 0, 6.5, "enemy", bullet_type="laser", sprite_key="boss_bullet_hellfire_red", w=8, h=24, damage=20, ttl=34))
+            for side in (-52, 52):
+                bullets.append(Bullet(cx + side, cy + 4, 0, 3.2, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_green", w=11, h=11, damage=18, homing=True, speed=3.4, turn_rate=0.16))
 
 class Bullet:
-    def __init__(self, x, y, vx, vy, owner, sprite_key=None, w=None, h=None, homing=False, speed=None):
+    def __init__(self, x, y, vx, vy, owner, sprite_key=None, w=None, h=None, homing=False, speed=None, bullet_type="normal", damage=12, ttl=0, turn_rate=0.4):
         self.x, self.y, self.vx, self.vy = x, y, vx, vy
         self.w, self.h = (w or 6), (h or 12)
         self.owner = owner  # 'player' or 'enemy'
         self.sprite_key = sprite_key
         self.homing = homing
+        self.bullet_type = bullet_type
+        self.damage = damage
+        self.ttl = ttl
+        self.turn_rate = turn_rate
         try:
             vlen = Math.sqrt(vx*vx + vy*vy)
         except Exception:
             vlen = 0
         self.speed = speed or (vlen or 7.0)
     def draw(self):
+        if self.bullet_type == "laser":
+            ctx.save()
+            if self.owner == "player":
+                ctx.fillStyle = "rgba(120,220,255,0.9)"
+                ctx.shadowColor = "rgba(120,220,255,0.85)"
+            else:
+                ctx.fillStyle = "rgba(255,80,80,0.9)"
+                ctx.shadowColor = "rgba(255,90,0,0.9)"
+            ctx.shadowBlur = 14
+            ctx.fillRect(self.x, self.y, self.w, self.h)
+            ctx.restore()
+            return
+
         if self.owner == "player":
-            if getattr(self, "homing", False):
+            if self.bullet_type == "homing" or getattr(self, "homing", False):
                 img = SPRITES.get("my_bullet_blue") or SPRITES.get("blue_bullet") or SPRITES.get("bullet_blue")
             elif player.weapon == "single":
                 img = SPRITES.get("my_bullet_red") or SPRITES.get("bullet_red")
@@ -609,23 +652,26 @@ class Bullet:
                 ctx.fillStyle = "#f90"
                 ctx.fillRect(self.x, self.y, self.w, self.h)
     def update(self):
-        if getattr(self, "homing", False) and self.owner == "player":
+        if getattr(self, "homing", False):
             target = None
-            try:
-                if boss:
-                    target = boss
-            except Exception:
-                target = None
-            if not target:
-                nearest = None
-                nearest_d2 = 1e12
-                for e in enemies:
-                    dx = (e.x + e.w/2) - (self.x + self.w/2)
-                    dy = (e.y + e.h/2) - (self.y + self.h/2)
-                    d2 = dx*dx + dy*dy
-                    if d2 < nearest_d2:
-                        nearest_d2 = d2; nearest = e
-                target = nearest
+            if self.owner == "player":
+                try:
+                    if boss:
+                        target = boss
+                except Exception:
+                    target = None
+                if not target:
+                    nearest = None
+                    nearest_d2 = 1e12
+                    for e in enemies:
+                        dx = (e.x + e.w/2) - (self.x + self.w/2)
+                        dy = (e.y + e.h/2) - (self.y + self.h/2)
+                        d2 = dx*dx + dy*dy
+                        if d2 < nearest_d2:
+                            nearest_d2 = d2; nearest = e
+                    target = nearest
+            else:
+                target = player
             if target:
                 dx = (target.x + target.w/2) - (self.x + self.w/2)
                 dy = (target.y + target.h/2) - (self.y + self.h/2)
@@ -638,10 +684,18 @@ class Bullet:
                     spd = 7.0
                 desired_vx = dx / dist * spd
                 desired_vy = dy / dist * spd
-                self.vx = self.vx*0.6 + desired_vx*0.4
-                self.vy = self.vy*0.6 + desired_vy*0.4
+                turn_rate = getattr(self, "turn_rate", 0.4)
+                self.vx = self.vx*(1-turn_rate) + desired_vx*turn_rate
+                self.vy = self.vy*(1-turn_rate) + desired_vy*turn_rate
+
+        if self.bullet_type == "orb":
+            self.vx *= 0.997
+            self.vy *= 1.004
+
         self.x += self.vx
         self.y += self.vy
+        if self.ttl and self.ttl > 0:
+            self.ttl -= 1
 
 class PowerUp:
     def __init__(self, kind, x, y):
@@ -1009,6 +1063,9 @@ def update():
     for b in bullets[:]:
         b.update()
         b.draw()
+        if getattr(b, "ttl", 0) == 0 and getattr(b, "bullet_type", "") == "laser":
+            safe_remove(bullets, b)
+            continue
         if b.y<-40 or b.y>canvas.height+40 or b.x<-40 or b.x>canvas.width+40:
             safe_remove(bullets, b)
 
@@ -1025,7 +1082,7 @@ def update():
             if rects_collide(b, e):
                 effects.append(Explosion(b.x, b.y))
                 play_sound("boom", 0.25)
-                safe_remove(bullets, b); e.hp -= 20
+                safe_remove(bullets, b); e.hp -= getattr(b, "damage", 20)
                 if e.hp<=0:
                     score += 10 if e.kind=="small" else 25
                     if Math.random()<0.25: spawn_power(e.x+e.w/2, e.y+e.h/2)
@@ -1039,7 +1096,7 @@ def update():
             except Exception:
                 pass
             try:
-                boss.hp -= 12
+                boss.hp -= getattr(b, "damage", 12)
             except Exception:
                 boss.hp = 0
             score += 2
@@ -1050,7 +1107,7 @@ def update():
     # Enemy bullets vs player
     for b in [bb for bb in bullets if bb.owner=="enemy"]:
         if player_center_hit(b):
-            damaged = player.hit(15)
+            damaged = player.hit(getattr(b, "damage", 15))
             safe_remove(bullets, b)
             if damaged:
                 effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
