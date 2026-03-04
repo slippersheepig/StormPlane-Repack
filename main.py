@@ -187,6 +187,9 @@ DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
 WEAPON_TIERS = ("single", "twin", "spread")
 CLEAR_WAVE_DURATION = 60 * 5
 CLEAR_WAVE_PULSE_GAP = 12
+PLAYER_MUZZLE_FX_ENABLED = False
+ENEMY_MUZZLE_FX_ENABLED = False
+BOSS_PATTERN_BG_FX_ENABLED = False
 TIER_TO_SPRITE = {
     "single": "player_blue",
     "twin":   "player_red",
@@ -445,7 +448,7 @@ class Player:
             ctx.arc(self.x + self.w/2, self.y + self.h/2, self.w * 0.7, 0, Math.PI * 2)
             ctx.stroke()
 
-        if self.shoot_cd >= 7:
+        if PLAYER_MUZZLE_FX_ENABLED and self.shoot_cd >= 7:
             fx_key = "player_single_shooting"
             if self.weapon == "twin":
                 fx_key = "player_twin_shooting"
@@ -524,7 +527,7 @@ class Enemy:
             ctx.fillStyle = "#a33" if self.kind=="small" else "#833"
             ctx.fillRect(self.x, self.y, self.w, self.h)
 
-        if self.kind == "big" and self.cd >= 35:
+        if ENEMY_MUZZLE_FX_ENABLED and self.kind == "big" and self.cd >= 35:
             fx = SPRITES.get("enemy_big_shooting")
             if fx:
                 try:
@@ -582,20 +585,21 @@ class Boss:
             ctx.fillStyle = "#5522aa"
             ctx.fillRect(self.x, self.y, self.w, self.h)
 
-        pattern_fx = {
-            0: "boss_pattern_triangle",
-            1: "boss_pattern_thunder",
-            2: "boss_pattern_sun",
-            3: "boss_pattern_hellfire",
-        }.get(getattr(self, "phase", 0), "boss_pattern_fire")
-        fx = SPRITES.get(pattern_fx) or SPRITES.get("boss_pattern_pinball")
-        if fx:
-            try:
-                ctx.globalAlpha = 0.22
-                ctx.drawImage(fx, self.x - 14, self.y - 8, self.w + 28, self.h + 18)
-                ctx.globalAlpha = 1.0
-            except Exception:
-                ctx.globalAlpha = 1.0
+        if BOSS_PATTERN_BG_FX_ENABLED:
+            pattern_fx = {
+                0: "boss_pattern_triangle",
+                1: "boss_pattern_thunder",
+                2: "boss_pattern_sun",
+                3: "boss_pattern_hellfire",
+            }.get(getattr(self, "phase", 0), "boss_pattern_fire")
+            fx = SPRITES.get(pattern_fx) or SPRITES.get("boss_pattern_pinball")
+            if fx:
+                try:
+                    ctx.globalAlpha = 0.22
+                    ctx.drawImage(fx, self.x - 14, self.y - 8, self.w + 28, self.h + 18)
+                    ctx.globalAlpha = 1.0
+                except Exception:
+                    ctx.globalAlpha = 1.0
         # HP bar
         ctx.fillStyle = "rgba(0,0,0,0.5)"
         ctx.fillRect(20, 20, canvas.width-40, 12)
