@@ -280,8 +280,6 @@ SPRITES = {
     "hud_life_icon": f"{IMG_BASE}/life.png",
     "hud_life_amount": f"{IMG_BASE}/life_amount.png",
     "power_missile_btn": f"{IMG_BASE}/missile_bt.png",
-    "bg_01": f"{IMG_BASE}/bg_01.jpg",
-    "bg_02": f"{IMG_BASE}/bg_02.jpg",
 }
 for k, p in list(SPRITES.items()):
     try:
@@ -1038,15 +1036,6 @@ def player_center_hit(obj, radius=PLAYER_HIT_RADIUS):
 def draw_bg():
     global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
     try:
-        # Prefer static background artwork if present in assets pack.
-        bg_img = SPRITES.get("bg_01") or SPRITES.get("bg_02")
-        if bg_img:
-            try:
-                ctx.drawImage(bg_img, 0, 0, canvas.width, canvas.height)
-                return
-            except Exception:
-                pass
-
         # Use the pre-rendered starfield if ready
         if bg_offscreen and _bg_offscreen_width == canvas.width and _bg_offscreen_height == canvas.height * 2:
             speed = 1.0
