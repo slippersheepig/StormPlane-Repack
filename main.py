@@ -264,6 +264,24 @@ SPRITES = {
     "my_bullet_red": f"{IMG_BASE}/my_bullet_red.png",
     "my_bullet_blue": f"{IMG_BASE}/my_bullet_blue.png",
     "my_bullet_purple": f"{IMG_BASE}/my_bullet_purple.png",
+    "player_default": f"{IMG_BASE}/myplane.png",
+    "enemy_medium_alt": f"{IMG_BASE}/middle.png",
+    "bullet_purple": f"{IMG_BASE}/purple_bullet.png",
+    "player_single_shooting": f"{IMG_BASE}/blue_shooting.jpg",
+    "player_twin_shooting": f"{IMG_BASE}/red_shooting.gif",
+    "player_spread_shooting": f"{IMG_BASE}/purple_shooting.gif",
+    "enemy_big_shooting": f"{IMG_BASE}/big_enemy_shooting.gif",
+    "boss_pattern_triangle": f"{IMG_BASE}/boss_shooting_triangle.jpg",
+    "boss_pattern_thunder": f"{IMG_BASE}/boss_shooting_thunderball.jpg",
+    "boss_pattern_fire": f"{IMG_BASE}/boss_shooting_fire_array.jpg",
+    "boss_pattern_hellfire": f"{IMG_BASE}/boss_shooting_hellfire.gif",
+    "boss_pattern_sun": f"{IMG_BASE}/boss_shooting_sun_particle.gif",
+    "boss_pattern_pinball": f"{IMG_BASE}/boss_shooting_fire_pinball.jpg",
+    "hud_life_icon": f"{IMG_BASE}/life.png",
+    "hud_life_amount": f"{IMG_BASE}/life_amount.png",
+    "power_missile_btn": f"{IMG_BASE}/missile_bt.png",
+    "bg_01": f"{IMG_BASE}/bg_01.jpg",
+    "bg_02": f"{IMG_BASE}/bg_02.jpg",
 }
 for k, p in list(SPRITES.items()):
     try:
@@ -283,14 +301,16 @@ def _fallback(key, *alts):
 
 _fallback("enemy_small", f"{IMG_BASE}/small.png")
 _fallback("enemy_big",   f"{IMG_BASE}/big.png")
+_fallback("enemy_medium",f"{IMG_BASE}/middle.png")
 _fallback("boss",        f"{IMG_BASE}/boosplane.png")
 _fallback("enemy_bullet",f"{IMG_BASE}/bigplane_bullet.png")
 _fallback("explosion",   f"{IMG_BASE}/myplaneexplosion.png")
+_fallback("player_blue", f"{IMG_BASE}/myplane.png", f"{IMG_BASE}/fly.png")
 # 备选的武器道具图（存在就换）
 _fallback("power_weapon", f"{IMG_BASE}/bullet_goods2.png", f"{IMG_BASE}/purple_bullet_goods.png", f"{IMG_BASE}/red_bullet_goods.png")
 _fallback("power_shield", f"{IMG_BASE}/plane_shield.png")
 _fallback("power_heal",   f"{IMG_BASE}/life_goods.png")
-_fallback("power_missile",f"{IMG_BASE}/missile_goods.png")
+_fallback("power_missile",f"{IMG_BASE}/missile_goods.png", f"{IMG_BASE}/missile_bt.png")
 
 bg_offscreen = None
 _bg_offscreen_width = 0
@@ -426,6 +446,21 @@ class Player:
             ctx.beginPath()
             ctx.arc(self.x + self.w/2, self.y + self.h/2, self.w * 0.7, 0, Math.PI * 2)
             ctx.stroke()
+
+        if self.shoot_cd >= 7:
+            fx_key = "player_single_shooting"
+            if self.weapon == "twin":
+                fx_key = "player_twin_shooting"
+            elif self.weapon == "spread":
+                fx_key = "player_spread_shooting"
+            fx = SPRITES.get(fx_key)
+            if fx:
+                try:
+                    ctx.globalAlpha = 0.75
+                    ctx.drawImage(fx, self.x - 4, self.y - 30, self.w + 8, 30)
+                    ctx.globalAlpha = 1.0
+                except Exception:
+                    ctx.globalAlpha = 1.0
     def shoot(self):
         if self.shoot_cd > 0:
             return
@@ -490,6 +525,16 @@ class Enemy:
         else:
             ctx.fillStyle = "#a33" if self.kind=="small" else "#833"
             ctx.fillRect(self.x, self.y, self.w, self.h)
+
+        if self.kind == "big" and self.cd >= 35:
+            fx = SPRITES.get("enemy_big_shooting")
+            if fx:
+                try:
+                    ctx.globalAlpha = 0.7
+                    ctx.drawImage(fx, self.x + 8, self.y + self.h - 14, self.w - 16, 20)
+                    ctx.globalAlpha = 1.0
+                except Exception:
+                    ctx.globalAlpha = 1.0
     def update(self):
         self.x += self.vx
         self.y += self.vy
@@ -538,6 +583,21 @@ class Boss:
         else:
             ctx.fillStyle = "#5522aa"
             ctx.fillRect(self.x, self.y, self.w, self.h)
+
+        pattern_fx = {
+            0: "boss_pattern_triangle",
+            1: "boss_pattern_thunder",
+            2: "boss_pattern_sun",
+            3: "boss_pattern_hellfire",
+        }.get(getattr(self, "phase", 0), "boss_pattern_fire")
+        fx = SPRITES.get(pattern_fx) or SPRITES.get("boss_pattern_pinball")
+        if fx:
+            try:
+                ctx.globalAlpha = 0.22
+                ctx.drawImage(fx, self.x - 14, self.y - 8, self.w + 28, self.h + 18)
+                ctx.globalAlpha = 1.0
+            except Exception:
+                ctx.globalAlpha = 1.0
         # HP bar
         ctx.fillStyle = "rgba(0,0,0,0.5)"
         ctx.fillRect(20, 20, canvas.width-40, 12)
@@ -628,7 +688,7 @@ class Bullet:
             else:
                 # Twin/Spread
                 if getattr(player, "sprite_key", "") == "player_purple":
-                    img = SPRITES.get("my_bullet_purple") or SPRITES.get("bullet_blue")
+                    img = SPRITES.get("my_bullet_purple") or SPRITES.get("bullet_purple") or SPRITES.get("bullet_blue")
                 else:
                     img = SPRITES.get("my_bullet_blue") or SPRITES.get("bullet_blue")
             if img:
@@ -978,6 +1038,15 @@ def player_center_hit(obj, radius=PLAYER_HIT_RADIUS):
 def draw_bg():
     global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
     try:
+        # Prefer static background artwork if present in assets pack.
+        bg_img = SPRITES.get("bg_01") or SPRITES.get("bg_02")
+        if bg_img:
+            try:
+                ctx.drawImage(bg_img, 0, 0, canvas.width, canvas.height)
+                return
+            except Exception:
+                pass
+
         # Use the pre-rendered starfield if ready
         if bg_offscreen and _bg_offscreen_width == canvas.width and _bg_offscreen_height == canvas.height * 2:
             speed = 1.0
