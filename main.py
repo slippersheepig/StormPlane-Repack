@@ -64,6 +64,8 @@ def fit_canvas():
             pass
         try:
             ctx.setTransform(1, 0, 0, 1, 0, 0)
+            ctx.imageSmoothingEnabled = True
+            ctx.imageSmoothingQuality = "low"
         except Exception:
             pass
 
@@ -190,6 +192,22 @@ CLEAR_WAVE_PULSE_GAP = 12
 PLAYER_MUZZLE_FX_ENABLED = False
 ENEMY_MUZZLE_FX_ENABLED = False
 BOSS_PATTERN_BG_FX_ENABLED = False
+
+# Performance guardrails: keep the Pyodide canvas loop responsive on low-end devices.
+MAX_ENEMIES = 42
+MAX_BULLETS = 220
+MAX_EFFECTS = 50
+MAX_POWERS = 18
+SOUND_RATE_LIMIT_MS = {
+    "shoot": 80,
+    "boom": 70,
+    "boom2": 90,
+    "boom3": 160,
+    "pickup": 40,
+    "button": 0,
+    "bigboom": 0,
+}
+_last_sound_at = {}
 TIER_TO_SPRITE = {
     "single": "player_blue",
     "twin":   "player_red",
@@ -406,11 +424,41 @@ SOUNDS = {
 # Helper: 播放声音
 def play_sound(key, vol=0.7):
     try:
-        from js import Audio
-        if key in SOUNDS and SOUNDS[key]:
+        now = window.performance.now()
+    except Exception:
+        now = 0
+    try:
+        limit = SOUND_RATE_LIMIT_MS.get(key, 0)
+        last = _last_sound_at.get(key, -100000)
+        if limit and now - last < limit:
+            return
+        _last_sound_at[key] = now
+    except Exception:
+        pass
+
+    try:
+        base = None
+        if hasattr(window, "PRELOADED_AUDIO") and key in SOUNDS:
+            try:
+                base = window.PRELOADED_AUDIO.get(SOUNDS[key])
+            except Exception:
+                base = None
+        if base:
+            try:
+                a = base.cloneNode(True)
+            except Exception:
+                a = base
+            try:
+                a.currentTime = 0
+            except Exception:
+                pass
+        else:
+            from js import Audio
+            if key not in SOUNDS or not SOUNDS[key]:
+                return
             a = Audio.new(SOUNDS[key])
-            a.volume = vol
-            a.play()
+        a.volume = vol
+        a.play()
     except Exception:
         pass
 
@@ -469,9 +517,13 @@ class Player:
         play_sound("shoot", 0.25)
         self.alt_fire_cycle = (self.alt_fire_cycle + 1) % 8
 
+        if len(bullets) >= MAX_BULLETS:
+            return
+
         if self.homing_combo:
             bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player", bullet_type="normal", damage=14))
-            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 12, 0, -6, "player", bullet_type="homing", homing=True, damage=16))
+            if len(bullets) < MAX_BULLETS:
+                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 12, 0, -6, "player", bullet_type="homing", homing=True, damage=16))
             return
 
         # 每隔几轮发射一次高能激光弹，增加玩法层次但不打破基础节奏
@@ -554,15 +606,19 @@ class Enemy:
                 vy = ty - cy
                 mag = (vx*vx+vy*vy) ** 0.5 + 1e-5
                 vx, vy = vx/mag*3.0, vy/mag*3.0
+                if len(bullets) >= MAX_BULLETS:
+                    return
                 if self.kind == "small":
                     bullets.append(Bullet(cx-3, cy, vx, vy, "enemy", bullet_type="normal", damage=14))
                 elif self.kind == "medium":
                     for off in (-0.35, 0, 0.35):
+                        if len(bullets) >= MAX_BULLETS:
+                            break
                         ang = Math.atan2(vy, vx) + off
                         bullets.append(Bullet(cx-3, cy, 3.0*Math.cos(ang), 3.0*Math.sin(ang), "enemy", bullet_type="normal", sprite_key="boss_bullet_triangle", damage=12))
                 else:
                     bullets.append(Bullet(cx-4, cy, vx*0.85, vy*0.85+0.3, "enemy", bullet_type="orb", sprite_key="boss_bullet_hellfire_yellow", w=10, h=10, damage=18))
-                    if Math.random() < 0.35:
+                    if len(bullets) < MAX_BULLETS and Math.random() < 0.35:
                         bullets.append(Bullet(cx-4, cy, vx*0.6, vy*0.6, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_red", w=10, h=10, damage=16, homing=True, speed=3.2, turn_rate=0.2))
 
 class Boss:
@@ -624,11 +680,15 @@ class Boss:
             self.phase = (self.phase+1) % 4
             self.fire_pattern(self.phase)
     def fire_pattern(self, p):
+        if len(bullets) >= MAX_BULLETS:
+            return
         cx = self.x + self.w/2
         cy = self.y + self.h
         if p == 0:
             # fan
             for a in range(-40, 41, 10):
+                if len(bullets) >= MAX_BULLETS:
+                    break
                 rad = (a/180.0)*Math.PI
                 vx, vy = 3*Math.sin(rad), 3*Math.cos(rad)
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_default"))
@@ -636,20 +696,28 @@ class Boss:
             # aimed bursts
             tx, ty = player.x+player.w/2, player.y+player.h/2
             for k in range(12):
+                if len(bullets) >= MAX_BULLETS:
+                    break
                 ang = Math.atan2(ty-cy, tx-cx) + (k-6)*0.08
                 vx, vy = 3.2*Math.cos(ang), 3.2*Math.sin(ang)
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key=("boss_bullet_thunderball_red" if (k % 2 == 0) else "boss_bullet_thunderball_green")))
         elif p == 2:
             # spiral
             for k in range(24):
+                if len(bullets) >= MAX_BULLETS:
+                    break
                 ang = k*0.26 + Math.random()*0.5
                 vx, vy = 2.6*Math.cos(ang), 2.6*Math.sin(ang)+0.8
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_sun_particle", bullet_type="orb", damage=14))
         else:
             # 混合弹幕：中轴激光 + 两侧追踪弹
             for lane in (-42, -18, 18, 42):
+                if len(bullets) >= MAX_BULLETS:
+                    break
                 bullets.append(Bullet(cx + lane, cy, 0, 6.5, "enemy", bullet_type="laser", sprite_key="boss_bullet_hellfire_red", w=8, h=24, damage=20, ttl=34))
             for side in (-52, 52):
+                if len(bullets) >= MAX_BULLETS:
+                    break
                 bullets.append(Bullet(cx + side, cy + 4, 0, 3.2, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_green", w=11, h=11, damage=18, homing=True, speed=3.4, turn_rate=0.16))
 
 class Bullet:
@@ -683,24 +751,40 @@ class Bullet:
             return
 
         if self.owner == "player":
+            # Draw player shots procedurally instead of stretching tiny sprites.
+            # This is cheaper in Pyodide than image lookups for every bullet and
+            # gives the weapons a cleaner, brighter arcade look.
             if self.bullet_type == "homing" or getattr(self, "homing", False):
-                img = SPRITES.get("my_bullet_blue") or SPRITES.get("blue_bullet") or SPRITES.get("bullet_blue")
+                outer = "rgba(100,210,255,0.35)"
+                inner = "#bff7ff"
+                core = "#ffffff"
             elif player.weapon == "single":
-                img = SPRITES.get("my_bullet_red") or SPRITES.get("bullet_red")
+                outer = "rgba(255,80,70,0.35)"
+                inner = "#ff5a48"
+                core = "#ffd3c9"
+            elif getattr(player, "sprite_key", "") == "player_purple":
+                outer = "rgba(210,110,255,0.35)"
+                inner = "#d76cff"
+                core = "#fff0ff"
             else:
-                # Twin/Spread
-                if getattr(player, "sprite_key", "") == "player_purple":
-                    img = SPRITES.get("my_bullet_purple") or SPRITES.get("bullet_purple") or SPRITES.get("bullet_blue")
-                else:
-                    img = SPRITES.get("my_bullet_blue") or SPRITES.get("bullet_blue")
-            if img:
-                try:
-                    ctx.drawImage(img, self.x, self.y, self.w, self.h)
-                except Exception:
-                    ctx.fillStyle = "#0bf" if player.weapon != "single" else "#f33"
-                    ctx.fillRect(self.x, self.y, self.w, self.h)
-            else:
-                ctx.fillStyle = "#0bf" if player.weapon != "single" else "#f33"
+                outer = "rgba(80,190,255,0.35)"
+                inner = "#4fd7ff"
+                core = "#ddfbff"
+            cx = self.x + self.w / 2
+            cy = self.y + self.h / 2
+            try:
+                ctx.fillStyle = outer
+                ctx.beginPath()
+                ctx.ellipse(cx, cy, self.w * 0.95, self.h * 0.75, 0, 0, Math.PI * 2)
+                ctx.fill()
+                ctx.fillStyle = inner
+                ctx.beginPath()
+                ctx.ellipse(cx, cy, self.w * 0.55, self.h * 0.55, 0, 0, Math.PI * 2)
+                ctx.fill()
+                ctx.fillStyle = core
+                ctx.fillRect(cx - 1, self.y + 2, 2, max(2, self.h - 4))
+            except Exception:
+                ctx.fillStyle = inner
                 ctx.fillRect(self.x, self.y, self.w, self.h)
         else:
             img = SPRITES.get(self.sprite_key) or SPRITES.get("enemy_bullet")
@@ -791,6 +875,11 @@ class Explosion:
     def update(self):
         self.t -= 1
 
+def add_explosion(x, y):
+    if len(effects) >= MAX_EFFECTS:
+        safe_remove(effects, effects[0])
+    effects.append(Explosion(x, y))
+
 def rects_collide(a, b):
     ax = a.x; ay = a.y; aw = a.w; ah = a.h
     bx = b.x; by = b.y; bw = b.w; bh = b.h
@@ -802,11 +891,15 @@ def update_hud():
     level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}｜动态+{_difficulty_tier(int(score))}"
 
 def spawn_enemy():
+    if len(enemies) >= MAX_ENEMIES:
+        return
     r = Math.random()
     kind = "small" if r < 0.55 else ("medium" if r < 0.85 else "big")
     enemies.append(Enemy(kind))
 
 def spawn_power(x, y):
+    if len(powers) >= MAX_POWERS:
+        return
     r = Math.random()
     kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
     powers.append(PowerUp(kind, x, y))
@@ -818,7 +911,7 @@ def trigger_clear_wave():
 def _defeat_boss():
     global boss, score, spawn_boss_at
     score += 300
-    effects.append(Explosion(boss.x+boss.w/2, boss.y+boss.h/2))
+    add_explosion(boss.x+boss.w/2, boss.y+boss.h/2)
     play_sound("bigboom", 0.6)
     boss = None
     try:
@@ -840,13 +933,13 @@ def run_clear_wave():
     play_sound("boom3", 0.18)
 
     for e in enemies[:]:
-        effects.append(Explosion(e.x + e.w/2, e.y + e.h/2))
+        add_explosion(e.x + e.w/2, e.y + e.h/2)
         score_gain = 10 if e.kind == "small" else 25
         score += score_gain
         safe_remove(enemies, e)
 
     for eb in [bb for bb in bullets if bb.owner == "enemy"]:
-        effects.append(Explosion(eb.x + eb.w/2, eb.y + eb.h/2))
+        add_explosion(eb.x + eb.w/2, eb.y + eb.h/2)
         safe_remove(bullets, eb)
 
     if boss:
@@ -1111,7 +1204,8 @@ def update():
             if selected_diff == "easy":
                 pass
             elif selected_diff == "normal":
-                enemies.append(Enemy("small"))
+                if len(enemies) < MAX_ENEMIES:
+                    enemies.append(Enemy("small"))
             else:
                 spawn_enemy()
 
@@ -1142,7 +1236,7 @@ def update():
     for b in [bb for bb in bullets if bb.owner=="player"]:
         for e in enemies[:]:
             if rects_collide(b, e):
-                effects.append(Explosion(b.x, b.y))
+                add_explosion(b.x, b.y)
                 play_sound("boom", 0.25)
                 safe_remove(bullets, b); e.hp -= getattr(b, "damage", 20)
                 if e.hp<=0:
@@ -1151,7 +1245,7 @@ def update():
                     safe_remove(enemies, e)
                 break
         if boss and rects_collide(b, boss):
-            effects.append(Explosion(b.x, b.y))
+            add_explosion(b.x, b.y)
             play_sound("boom2", 0.25)
             try:
                 safe_remove(bullets, b)
@@ -1172,7 +1266,7 @@ def update():
             damaged = player.hit(getattr(b, "damage", 15))
             safe_remove(bullets, b)
             if damaged:
-                effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
+                add_explosion(player.x+player.w/2, player.y+player.h/2)
                 play_sound("boom", 0.25)
                 shake = 8
             else:
@@ -1184,7 +1278,7 @@ def update():
             damaged = player.hit(25)
             safe_remove(enemies, e)
             if damaged:
-                effects.append(Explosion(player.x+player.w/2, player.y+player.h/2))
+                add_explosion(player.x+player.w/2, player.y+player.h/2)
                 play_sound("boom", 0.25)
                 shake = 10
             else:
