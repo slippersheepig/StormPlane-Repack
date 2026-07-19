@@ -62,7 +62,7 @@ jobs:
           echo "Done."
 
       - name: Commit change (only if there is a diff)
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore(ci): bump Pyodide to ${{ steps.get_latest.outputs.tag }}"
           file_pattern: index.html
