@@ -103,61 +103,81 @@ body.playing #hud {
   text-shadow: 0 0 22px rgba(0, 210, 255, 0.42), 0 2px 0 rgba(0, 0, 0, 0.5);
 }
 
+/* ===== 难度选择：分段控制器（segmented control）===== */
 #menu .btns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0 0 24px;
+  gap: 5px;
+  margin: 0 0 26px;
   padding: 6px;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-#menu .btns button,
+#menu .btns button {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.66);
+  background: transparent;
+  min-height: 44px;
+  padding: 11px 10px;
+  border-radius: 999px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+#menu .btns button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#menu .btns button:focus-visible {
+  outline: 2px solid rgba(0, 210, 255, 0.65);
+  outline-offset: -2px;
+}
+
+#menu .btns button.active {
+  color: #fff;
+  background: linear-gradient(135deg, #00d2ff, #3a7bff 58%, #6d2df7);
+  box-shadow:
+    0 6px 20px rgba(0, 150, 255, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+#menu .btns button:active {
+  transform: scale(0.97);
+}
+
+/* ===== 开始游戏按钮 ===== */
 #start-btn {
   appearance: none;
   position: relative;
   overflow: hidden;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.42);
-  transition: transform .16s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease;
-}
-
-#menu .btns button {
-  min-height: 44px;
-  padding: 10px 14px;
-  font-size: 15px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.035));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
-}
-
-#menu .btns button.active {
-  border-color: rgba(255, 214, 102, 0.84);
-  background: linear-gradient(135deg, #ff9f1c, #ff3d81 54%, #7b2ff7);
-  box-shadow:
-    0 10px 26px rgba(255, 61, 129, 0.34),
-    0 0 22px rgba(255, 214, 102, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
-}
-
-#start-btn {
   width: 100%;
-  min-height: 58px;
-  padding: 16px 26px;
-  font-size: 19px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #00d2ff, #3a47d5 52%, #6d2df7);
-  box-shadow:
-    0 16px 38px rgba(0, 160, 255, 0.36),
-    0 0 30px rgba(58, 71, 213, 0.22),
-    inset 0 1px 0 rgba(255,255,255,0.24);
+  min-height: 60px;
+  padding: 17px 26px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #fff;
+  cursor: pointer;
+  border: 1px solid rgba(140, 225, 255, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #00d2ff, #3a7bff 55%, #6d2df7);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  animation: startGlow 2.8s ease-in-out infinite;
+  transition: transform .16s ease, filter .2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #start-btn::after {
@@ -167,31 +187,36 @@ body.playing #hud {
   left: -45%;
   width: 42%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.34), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.38), transparent);
   transform: skewX(-18deg);
-  transition: left .45s ease;
+  animation: sheen 3.4s ease-in-out infinite;
 }
 
-#menu .btns button:hover,
-#menu .btns button:focus-visible,
+@keyframes startGlow {
+  0%, 100% { box-shadow: 0 16px 40px rgba(0,160,255,.38), 0 0 26px rgba(109,45,247,.22), inset 0 1px 0 rgba(255,255,255,.32); }
+  50%      { box-shadow: 0 16px 44px rgba(0,190,255,.5),  0 0 46px rgba(109,45,247,.38), inset 0 1px 0 rgba(255,255,255,.36); }
+}
+
+@keyframes sheen {
+  0%, 55%   { left: -45%; }
+  85%, 100% { left: 112%; }
+}
+
 #start-btn:hover,
 #start-btn:focus-visible {
-  transform: translateY(-2px);
-  border-color: rgba(255,255,255,0.34);
-  box-shadow:
-    0 18px 40px rgba(0, 210, 255, 0.24),
-    inset 0 1px 0 rgba(255,255,255,0.22);
+  transform: translateY(-2px) scale(1.01);
+  filter: brightness(1.08);
   outline: none;
 }
 
-#start-btn:hover::after,
-#start-btn:focus-visible::after {
-  left: 112%;
-}
-
-#menu .btns button:active,
 #start-btn:active {
   transform: translateY(1px) scale(0.99);
+  filter: brightness(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #start-btn { animation: none; }
+  #start-btn::after { display: none; }
 }
 
 @media (max-width:480px) {
@@ -228,16 +253,6 @@ body.playing #hud {
 }
 
 /* Circular progress loader centered */
-#loading {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  pointer-events: auto;
-  background: rgba(0,0,0,0.75);
-}
 .loader-circle {
   display: flex;
   flex-direction: column;
