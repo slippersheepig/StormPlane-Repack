@@ -126,6 +126,7 @@ for i in range(diff_buttons.length):
 diff_buttons.item(1).classList.add("active")  # normal default
 
 game_over = False
+death_timer = 0  # >0 表示玩家死亡演出进行中
 state = "menu"  # 'menu' -> 'playing' -> 'gameover'
 INITIAL_BOSS_SCORE_THRESHOLD = 500
 
@@ -189,9 +190,10 @@ DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
 WEAPON_TIERS = ("single", "twin", "spread")
 CLEAR_WAVE_DURATION = 60 * 5
 CLEAR_WAVE_PULSE_GAP = 12
-PLAYER_MUZZLE_FX_ENABLED = False
-ENEMY_MUZZLE_FX_ENABLED = False
-BOSS_PATTERN_BG_FX_ENABLED = False
+
+# 视觉特效开关：启用仓库自带特效图，增强战斗画面表现力
+PLAYER_MUZZLE_FX_ENABLED = True    # 玩家开火枪口火焰（blue_shooting.jpg）
+BOSS_PATTERN_BG_FX_ENABLED = True  # Boss 弹幕阶段背景光效（boss_shooting_*.jpg）
 
 # Performance guardrails: keep the Pyodide canvas loop responsive on low-end devices.
 MAX_ENEMIES = 42
@@ -263,15 +265,17 @@ SPRITES = {
     "boss":         f"{IMG_BASE}/boss_enemy.png",
     "boss_crazy":   f"{IMG_BASE}/bossplane_crazy.png",
     "boss_bomb":    f"{IMG_BASE}/bossplane_bomb.png",
-    "bullet_red":   f"{IMG_BASE}/red_bullet.png",
-    "bullet_blue":  f"{IMG_BASE}/blue_bullet.png",
     "enemy_bullet": f"{IMG_BASE}/big_enemy_bullet.png",
     "explosion":    f"{IMG_BASE}/boom.png",
+    "explosion_big": f"{IMG_BASE}/myplaneexplosion.png",
+    "player_muzzle": f"{IMG_BASE}/blue_shooting.jpg",
+    "boss_pattern_triangle": f"{IMG_BASE}/boss_shooting_triangle.jpg",
+    "boss_pattern_thunder": f"{IMG_BASE}/boss_shooting_thunderball.jpg",
+    "boss_pattern_fire": f"{IMG_BASE}/boss_shooting_fire_array.jpg",
+    "boss_pattern_pinball": f"{IMG_BASE}/boss_shooting_fire_pinball.jpg",
     "power_weapon": f"{IMG_BASE}/bullet_goods1.png",
     "power_shield": f"{IMG_BASE}/plane_shield.png",
     "power_heal":   f"{IMG_BASE}/life_goods.png",
-    "power_missile":f"{IMG_BASE}/missile_goods.png",
-    "text":         f"{IMG_BASE}/text.png",
     "boss_bullet_default": f"{IMG_BASE}/boss_bullet_default.png",
     "boss_bullet_triangle": f"{IMG_BASE}/boss_bullet_triangle.png",
     "boss_bullet_thunderball_red": f"{IMG_BASE}/boss_bullet_thunderball_red.png",
@@ -279,28 +283,6 @@ SPRITES = {
     "boss_bullet_hellfire_red": f"{IMG_BASE}/boss_bullet_hellfire_red.png",
     "boss_bullet_hellfire_yellow": f"{IMG_BASE}/boss_bullet_hellfire_yellow.png",
     "boss_bullet_sun_particle": f"{IMG_BASE}/boss_bullet_sun_particle.png",
-    # Aliases used by some resource packs
-    "bossbullet_default": f"{IMG_BASE}/bossbullet_default.png",
-    # Player bullet variants
-    "my_bullet_red": f"{IMG_BASE}/my_bullet_red.png",
-    "my_bullet_blue": f"{IMG_BASE}/my_bullet_blue.png",
-    "my_bullet_purple": f"{IMG_BASE}/my_bullet_purple.png",
-    "player_default": f"{IMG_BASE}/myplane.png",
-    "enemy_medium_alt": f"{IMG_BASE}/middle.png",
-    "bullet_purple": f"{IMG_BASE}/purple_bullet.png",
-    "player_single_shooting": f"{IMG_BASE}/blue_shooting.jpg",
-    "player_twin_shooting": f"{IMG_BASE}/red_shooting.gif",
-    "player_spread_shooting": f"{IMG_BASE}/purple_shooting.gif",
-    "enemy_big_shooting": f"{IMG_BASE}/big_enemy_shooting.gif",
-    "boss_pattern_triangle": f"{IMG_BASE}/boss_shooting_triangle.jpg",
-    "boss_pattern_thunder": f"{IMG_BASE}/boss_shooting_thunderball.jpg",
-    "boss_pattern_fire": f"{IMG_BASE}/boss_shooting_fire_array.jpg",
-    "boss_pattern_hellfire": f"{IMG_BASE}/boss_shooting_hellfire.gif",
-    "boss_pattern_sun": f"{IMG_BASE}/boss_shooting_sun_particle.gif",
-    "boss_pattern_pinball": f"{IMG_BASE}/boss_shooting_fire_pinball.jpg",
-    "hud_life_icon": f"{IMG_BASE}/life.png",
-    "hud_life_amount": f"{IMG_BASE}/life_amount.png",
-    "power_missile_btn": f"{IMG_BASE}/missile_bt.png",
 }
 for k, p in list(SPRITES.items()):
     try:
@@ -329,7 +311,6 @@ _fallback("player_blue", f"{IMG_BASE}/myplane.png", f"{IMG_BASE}/fly.png")
 _fallback("power_weapon", f"{IMG_BASE}/bullet_goods2.png", f"{IMG_BASE}/purple_bullet_goods.png", f"{IMG_BASE}/red_bullet_goods.png")
 _fallback("power_shield", f"{IMG_BASE}/plane_shield.png")
 _fallback("power_heal",   f"{IMG_BASE}/life_goods.png")
-_fallback("power_missile",f"{IMG_BASE}/missile_goods.png", f"{IMG_BASE}/missile_bt.png")
 
 bg_offscreen = None
 _bg_offscreen_width = 0
@@ -479,6 +460,8 @@ class Player:
         self.clear_wave_pulse_cd = 0
         self.alt_fire_cycle = 0
     def draw(self):
+        if getattr(self, "hp", 1) <= 0:
+            return  # 玩家已坠机，死亡演出期间不再绘制机体
         img = SPRITES.get(self.sprite_key)
         if img:
             try:
@@ -489,6 +472,7 @@ class Player:
         else:
             ctx.fillStyle = "#2b7"
             ctx.fillRect(self.x, self.y, self.w, self.h)
+
         if self.shield > 0:
             ctx.strokeStyle = "rgba(0,200,255,0.8)"
             ctx.lineWidth = 3
@@ -497,19 +481,15 @@ class Player:
             ctx.stroke()
 
         if PLAYER_MUZZLE_FX_ENABLED and self.shoot_cd >= 7:
-            fx_key = "player_single_shooting"
-            if self.weapon == "twin":
-                fx_key = "player_twin_shooting"
-            elif self.weapon == "spread":
-                fx_key = "player_spread_shooting"
-            fx = SPRITES.get(fx_key)
+            fx = SPRITES.get("player_muzzle")
             if fx:
                 try:
-                    ctx.globalAlpha = 0.75
-                    ctx.drawImage(fx, self.x - 4, self.y - 30, self.w + 8, 30)
+                    ctx.globalAlpha = 0.78
+                    ctx.drawImage(fx, self.x - 4, self.y - 26, self.w + 8, 28)
                     ctx.globalAlpha = 1.0
                 except Exception:
                     ctx.globalAlpha = 1.0
+
     def shoot(self):
         if self.shoot_cd > 0:
             return
@@ -578,16 +558,6 @@ class Enemy:
         else:
             ctx.fillStyle = "#a33" if self.kind=="small" else "#833"
             ctx.fillRect(self.x, self.y, self.w, self.h)
-
-        if ENEMY_MUZZLE_FX_ENABLED and self.kind == "big" and self.cd >= 35:
-            fx = SPRITES.get("enemy_big_shooting")
-            if fx:
-                try:
-                    ctx.globalAlpha = 0.7
-                    ctx.drawImage(fx, self.x + 8, self.y + self.h - 14, self.w - 16, 20)
-                    ctx.globalAlpha = 1.0
-                except Exception:
-                    ctx.globalAlpha = 1.0
     def update(self):
         self.x += self.vx
         self.y += self.vy
@@ -634,7 +604,13 @@ class Boss:
         self.cd = 120
         self.pattern_count = 0
     def draw(self):
-        key = "boss_crazy" if getattr(self, "phase", 0) == 2 and SPRITES.get("boss_crazy") else "boss"
+        ph = getattr(self, "phase", 0)
+        if ph == 2 and SPRITES.get("boss_crazy"):
+            key = "boss_crazy"
+        elif ph == 3 and SPRITES.get("boss_bomb"):
+            key = "boss_bomb"
+        else:
+            key = "boss"
         img = SPRITES.get(key)
         if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
         else:
@@ -645,13 +621,11 @@ class Boss:
             pattern_fx = {
                 0: "boss_pattern_triangle",
                 1: "boss_pattern_thunder",
-                2: "boss_pattern_sun",
-                3: "boss_pattern_hellfire",
-            }.get(getattr(self, "phase", 0), "boss_pattern_fire")
+            }.get(ph, "boss_pattern_fire")
             fx = SPRITES.get(pattern_fx) or SPRITES.get("boss_pattern_pinball")
             if fx:
                 try:
-                    ctx.globalAlpha = 0.22
+                    ctx.globalAlpha = 0.24
                     ctx.drawImage(fx, self.x - 14, self.y - 8, self.w + 28, self.h + 18)
                     ctx.globalAlpha = 1.0
                 except Exception:
@@ -860,13 +834,28 @@ class PowerUp:
         self.y += self.vy
 
 class Explosion:
-    def __init__(self, x, y):
+    def __init__(self, x, y, sprite_key=None, size=40):
         self.x, self.y = x, y
         self.t = 24
+        self.sprite_key = sprite_key
+        self.size = size
     def draw(self):
-        img = SPRITES.get("explosion")
+        img = SPRITES.get(self.sprite_key) if self.sprite_key else None
+        if img is None:
+            img = SPRITES.get("explosion")
+        half = getattr(self, "size", 40) / 2
+        alpha = min(1.0, max(0.0, self.t / 12))
         if img:
-            ctx.drawImage(img, self.x-20, self.y-20, 40, 40)
+            try:
+                ctx.globalAlpha = alpha
+                ctx.drawImage(img, self.x-half, self.y-half, half*2, half*2)
+                ctx.globalAlpha = 1.0
+            except Exception:
+                ctx.globalAlpha = 1.0
+                ctx.fillStyle = f"rgba(255,150,0,{self.t/24})"
+                ctx.beginPath()
+                ctx.arc(self.x, self.y, (24-self.t)+10, 0, Math.PI*2)
+                ctx.fill()
         else:
             ctx.fillStyle = f"rgba(255,150,0,{self.t/24})"
             ctx.beginPath()
@@ -875,10 +864,10 @@ class Explosion:
     def update(self):
         self.t -= 1
 
-def add_explosion(x, y):
+def add_explosion(x, y, sprite_key=None, size=40):
     if len(effects) >= MAX_EFFECTS:
         safe_remove(effects, effects[0])
-    effects.append(Explosion(x, y))
+    effects.append(Explosion(x, y, sprite_key=sprite_key, size=size))
 
 def rects_collide(a, b):
     ax = a.x; ay = a.y; aw = a.w; ah = a.h
@@ -909,10 +898,14 @@ def trigger_clear_wave():
     player.clear_wave_pulse_cd = 0
 
 def _defeat_boss():
-    global boss, score, spawn_boss_at
+    global boss, score, spawn_boss_at, shake
     score += 300
-    add_explosion(boss.x+boss.w/2, boss.y+boss.h/2)
+    bx, by = boss.x+boss.w/2, boss.y+boss.h/2
+    add_explosion(bx, by, sprite_key="explosion_big", size=110)
+    for off_x, off_y in ((-40,-20),(36,-24),(-30,26),(44,18),(0,-46)):
+        add_explosion(bx+off_x, by+off_y, size=64)
     play_sound("bigboom", 0.6)
+    shake = max(shake, 16)
     boss = None
     try:
         spawn_boss_at = score + 1000
@@ -957,7 +950,7 @@ def maybe_spawn_boss():
         boss = Boss()
 
 def reset_game():
-    global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake, spawn_boss_at
+    global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake, spawn_boss_at, death_timer
     player = Player()
     _apply_tier_sprite(player)
     try:
@@ -972,6 +965,7 @@ def reset_game():
     shake = 0
     spawn_boss_at = INITIAL_BOSS_SCORE_THRESHOLD
     game_over = False
+    death_timer = 0
 
 # Touch controls: drag to move, tap to shoot
 touch_active = False
@@ -1170,7 +1164,7 @@ def draw_bg():
         pass
 
 def update():
-    global frame, score, game_over, shake, boss, spawn_boss_at
+    global frame, score, game_over, shake, boss, spawn_boss_at, death_timer
     if state == "menu":
         window.requestAnimationFrame(_raf_proxy)
         return
@@ -1339,8 +1333,23 @@ def update():
     update_hud()
 
     if player.hp <= 0:
-        end_game()
-        return
+        # 死亡演出：连环爆炸 + 屏幕震动，随后再进入结算画面
+        if death_timer == 0:
+            px, py = player.x + player.w/2, player.y + player.h/2
+            add_explosion(px, py, sprite_key="explosion_big", size=100)
+            for off_x, off_y in ((-22,-12),(20,-16),(-6,18),(14,10)):
+                add_explosion(px+off_x, py+off_y)
+            shake = 20
+            play_sound("bigboom", 0.6)
+            death_timer = 50
+        else:
+            death_timer -= 1
+            if Math.random() < 0.3:
+                add_explosion(player.x + randf(0, player.w), player.y + randf(0, player.h))
+            if death_timer <= 0:
+                death_timer = 0
+                end_game()
+                return
 
     window.requestAnimationFrame(_raf_proxy)
 
