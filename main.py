@@ -191,9 +191,8 @@ WEAPON_TIERS = ("single", "twin", "spread")
 CLEAR_WAVE_DURATION = 60 * 5
 CLEAR_WAVE_PULSE_GAP = 12
 
-# 视觉特效开关：启用仓库自带特效图，增强战斗画面表现力
-PLAYER_MUZZLE_FX_ENABLED = True    # 玩家开火枪口火焰（blue_shooting.jpg）
-BOSS_PATTERN_BG_FX_ENABLED = True  # Boss 弹幕阶段背景光效（boss_shooting_*.jpg）
+# 视觉特效开关：以下两张特效图为旧版 UI 素材，叠加在新画面上效果怪异，已停用并移除
+# PLAYER_MUZZLE_FX / BOSS_PATTERN_BG_FX 相关代码与资源已删除
 
 # Performance guardrails: keep the Pyodide canvas loop responsive on low-end devices.
 MAX_ENEMIES = 42
@@ -268,11 +267,6 @@ SPRITES = {
     "enemy_bullet": f"{IMG_BASE}/big_enemy_bullet.png",
     "explosion":    f"{IMG_BASE}/boom.png",
     "explosion_big": f"{IMG_BASE}/myplaneexplosion.png",
-    "player_muzzle": f"{IMG_BASE}/blue_shooting.jpg",
-    "boss_pattern_triangle": f"{IMG_BASE}/boss_shooting_triangle.jpg",
-    "boss_pattern_thunder": f"{IMG_BASE}/boss_shooting_thunderball.jpg",
-    "boss_pattern_fire": f"{IMG_BASE}/boss_shooting_fire_array.jpg",
-    "boss_pattern_pinball": f"{IMG_BASE}/boss_shooting_fire_pinball.jpg",
     "power_weapon": f"{IMG_BASE}/bullet_goods1.png",
     "power_shield": f"{IMG_BASE}/plane_shield.png",
     "power_heal":   f"{IMG_BASE}/life_goods.png",
@@ -480,16 +474,6 @@ class Player:
             ctx.arc(self.x + self.w/2, self.y + self.h/2, self.w * 0.7, 0, Math.PI * 2)
             ctx.stroke()
 
-        if PLAYER_MUZZLE_FX_ENABLED and self.shoot_cd >= 7:
-            fx = SPRITES.get("player_muzzle")
-            if fx:
-                try:
-                    ctx.globalAlpha = 0.78
-                    ctx.drawImage(fx, self.x - 4, self.y - 26, self.w + 8, 28)
-                    ctx.globalAlpha = 1.0
-                except Exception:
-                    ctx.globalAlpha = 1.0
-
     def shoot(self):
         if self.shoot_cd > 0:
             return
@@ -612,24 +596,13 @@ class Boss:
         else:
             key = "boss"
         img = SPRITES.get(key)
-        if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
-        else:
-            ctx.fillStyle = "#5522aa"
-            ctx.fillRect(self.x, self.y, self.w, self.h)
+        if img:
+            try:
+                ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            except Exception:
+                ctx.fillStyle = "#5522aa"
+                ctx.fillRect(self.x, self.y, self.w, self.h)
 
-        if BOSS_PATTERN_BG_FX_ENABLED:
-            pattern_fx = {
-                0: "boss_pattern_triangle",
-                1: "boss_pattern_thunder",
-            }.get(ph, "boss_pattern_fire")
-            fx = SPRITES.get(pattern_fx) or SPRITES.get("boss_pattern_pinball")
-            if fx:
-                try:
-                    ctx.globalAlpha = 0.24
-                    ctx.drawImage(fx, self.x - 14, self.y - 8, self.w + 28, self.h + 18)
-                    ctx.globalAlpha = 1.0
-                except Exception:
-                    ctx.globalAlpha = 1.0
         # HP bar
         ctx.fillStyle = "rgba(0,0,0,0.5)"
         ctx.fillRect(20, 20, canvas.width-40, 12)
