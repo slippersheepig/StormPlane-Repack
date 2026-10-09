@@ -1,3 +1,7 @@
+import random
+from js import Image
+
+
 def rects_collide(a, b):
     # 兼容使用 w/h 或 rect.width/height 的对象
     aw = getattr(a, 'w', getattr(a, 'width', 0))
@@ -12,6 +16,7 @@ def rects_collide(a, b):
         a.y > b.y + bh
     )
 
+
 def clamp(value, min_value, max_value):
     # 限制 value 在 [min_value, max_value] 范围内
     if value < min_value:
@@ -20,11 +25,10 @@ def clamp(value, min_value, max_value):
         return max_value
     return value
 
-import random
-from js import Image
 
 def randf(a, b):
-    return random.random()*(b-a)+a
+    return random.random() * (b - a) + a
+
 
 def load_sprite(path):
     try:
@@ -36,3 +40,4 @@ def load_sprite(path):
         return img
     except Exception:
         return None
+
