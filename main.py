@@ -103,8 +103,6 @@ except Exception:
 hud = document.getElementById("hud")
 score_el = document.getElementById("score")
 lives_el = document.getElementById("lives")
-life_fill_el = document.getElementById("life-fill")
-life_text_el = document.getElementById("life-text")
 level_el = document.getElementById("level")
 
 # Menu elements
@@ -190,9 +188,6 @@ DIFF_NAME_ZH = {"easy": "简单", "normal": "普通", "hard": "困难"}
 WEAPON_TIERS = ("single", "twin", "spread")
 CLEAR_WAVE_DURATION = 60 * 5
 CLEAR_WAVE_PULSE_GAP = 12
-
-# 视觉特效开关：以下两张特效图为旧版 UI 素材，叠加在新画面上效果怪异，已停用并移除
-# PLAYER_MUZZLE_FX / BOSS_PATTERN_BG_FX 相关代码与资源已删除
 
 # Performance guardrails: keep the Pyodide canvas loop responsive on low-end devices.
 MAX_ENEMIES = 42
@@ -329,7 +324,6 @@ def build_bg_offscreen():
         offctx.fillRect(0, 0, off.width, off.height)
 
         # Star layers (parallax baked into scroll)
-        import math as _py_math
         def _lay(count, minr, maxr, alpha_min, alpha_max):
             for i in range(count):
                 x = Math.floor(Math.random() * w)
@@ -354,25 +348,6 @@ def build_bg_offscreen():
         _lay(max(35,  int(area / 11000)), 0.6, 1.2, 0.35, 0.7)   # distant faint stars
         _lay(max(18,  int(area / 22000)), 1.0, 1.8, 0.6,  0.9)   # mid stars
         _lay(max(7,   int(area / 36000)), 1.6, 2.4, 0.8,  1.0)   # near bright stars
-
-        # (Disabled) nebula swirls removed to keep background luminance stable and avoid perceived "reset"
-        # try:
-        #     for _ in range(max(1, int(area / 220000))):
-        #         cx = randf(0, w); cy = randf(0, h * 2)
-        #         rx = randf(120, 240); ry = randf(60, 140)
-        #         offctx.save()
-        #         offctx.translate(cx, cy)
-        #         offctx.rotate(randf(0, Math.PI))
-        #         grd = offctx.createRadialGradient(0,0,0, 0,0, max(rx, ry))
-        #         grd.addColorStop(0.0, "rgba(30,60,120,0.12)")
-        #         grd.addColorStop(1.0, "rgba(0,0,0,0)")
-        #         offctx.fillStyle = grd
-        #         offctx.beginPath()
-        #         offctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
-        #         offctx.fill()
-        #         offctx.restore()
-        # except Exception:
-        #     pass
 
         bg_offscreen = off
         _bg_offscreen_width = off.width
@@ -535,12 +510,16 @@ class Enemy:
         self.hp = 15 if kind=="small" else (40 if kind=="big" else 28)
         self.cd = 40  # shoot cooldown
     def draw(self):
-        key = "enemy_small" if self.kind=="small" else ("enemy_big" if self.kind=="big" else "enemy_medium")
+        key = "enemy_small" if self.kind == "small" else ("enemy_big" if self.kind == "big" else "enemy_medium")
         img = SPRITES.get(key)
         if img:
-            ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            try:
+                ctx.drawImage(img, self.x, self.y, self.w, self.h)
+            except Exception:
+                ctx.fillStyle = "#a33" if self.kind == "small" else "#833"
+                ctx.fillRect(self.x, self.y, self.w, self.h)
         else:
-            ctx.fillStyle = "#a33" if self.kind=="small" else "#833"
+            ctx.fillStyle = "#a33" if self.kind == "small" else "#833"
             ctx.fillRect(self.x, self.y, self.w, self.h)
     def update(self):
         self.x += self.vx
@@ -842,10 +821,6 @@ def add_explosion(x, y, sprite_key=None, size=40):
         safe_remove(effects, effects[0])
     effects.append(Explosion(x, y, sprite_key=sprite_key, size=size))
 
-def rects_collide(a, b):
-    ax = a.x; ay = a.y; aw = a.w; ah = a.h
-    bx = b.x; by = b.y; bw = b.w; bh = b.h
-    return (ax < bx+bw and ax+aw > bx and ay < by+bh and ay+ah > by)
 
 def update_hud():
     score_el.innerText = f"分数：{int(score)}"
@@ -931,7 +906,10 @@ def reset_game():
         player.y = clamp(player.y, 0, canvas.height - player.h)
     except Exception:
         pass
-    enemies.clear(); bullets.clear(); powers.clear(); effects.clear()
+    enemies.clear()
+    bullets.clear()
+    powers.clear()
+    effects.clear()
     boss = None
     score = 0
     frame = 0
@@ -1180,7 +1158,7 @@ def update():
         e.update()
         e.draw()
         if e.y > canvas.height + 40:
-            enemies.remove(e)
+            safe_remove(enemies, e)
 
     # Bullets
     for b in bullets[:]:
@@ -1189,26 +1167,28 @@ def update():
         if getattr(b, "ttl", 0) == 0 and getattr(b, "bullet_type", "") == "laser":
             safe_remove(bullets, b)
             continue
-        if b.y<-40 or b.y>canvas.height+40 or b.x<-40 or b.x>canvas.width+40:
+        if b.y < -40 or b.y > canvas.height + 40 or b.x < -40 or b.x > canvas.width + 40:
             safe_remove(bullets, b)
 
     # Powers
     for p in powers[:]:
         p.update()
         p.draw()
-        if p.y > canvas.height+40:
+        if p.y > canvas.height + 40:
             safe_remove(powers, p)
-    
+
     # Collisions
-    for b in [bb for bb in bullets if bb.owner=="player"]:
+    for b in [bb for bb in bullets if bb.owner == "player"]:
         for e in enemies[:]:
             if rects_collide(b, e):
                 add_explosion(b.x, b.y)
                 play_sound("boom", 0.25)
-                safe_remove(bullets, b); e.hp -= getattr(b, "damage", 20)
-                if e.hp<=0:
-                    score += 10 if e.kind=="small" else 25
-                    if Math.random()<0.25: spawn_power(e.x+e.w/2, e.y+e.h/2)
+                safe_remove(bullets, b)
+                e.hp -= getattr(b, "damage", 20)
+                if e.hp <= 0:
+                    score += 10 if e.kind == "small" else 25
+                    if Math.random() < 0.25:
+                        spawn_power(e.x + e.w / 2, e.y + e.h / 2)
                     safe_remove(enemies, e)
                 break
         if boss and rects_collide(b, boss):
@@ -1290,12 +1270,13 @@ def update():
 
     # Effects
     for fx in effects[:]:
-        fx.update(); fx.draw()
-        if fx.t<=0:
+        fx.update()
+        fx.draw()
+        if fx.t <= 0:
             safe_remove(effects, fx)
 
     # Shake (装饰)
-    if shake>0:
+    if shake > 0:
         shake -= 1
         ctx.save()
         ctx.translate(randf(-2,2), randf(-2,2))
@@ -1328,7 +1309,8 @@ def update():
 
 def end_game():
     global state, game_over
-    state = "gameover"; game_over = True
+    state = "gameover"
+    game_over = True
     document.body.classList.remove("playing")
 
     try:
@@ -1347,9 +1329,13 @@ def end_game():
     # 绘制 GAME OVER 覆盖层
     ctx.fillStyle = "rgba(0,0,0,0.45)"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = "red"
-    ctx.font = "42px Arial"
-    ctx.fillText("GAME OVER", canvas.width/2 - 120, canvas.height/2)
+    ctx.fillStyle = "#ff4444"
+    ctx.font = "bold 44px Arial, sans-serif"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2)
+    ctx.textAlign = "left"
+    ctx.textBaseline = "alphabetic"
     # show menu after short delay
     def show_menu(*args):
         menu.style.display = "flex"
@@ -1447,8 +1433,6 @@ def first_frame():
     draw_bg()
     ctx.fillStyle = "rgba(0,0,0,0.45)"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = "white"
-    ctx.font = "24px Arial"
 
 _raf_proxy = create_proxy(lambda *_: update())
 first_frame()
