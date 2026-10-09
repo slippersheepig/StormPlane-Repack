@@ -33,23 +33,28 @@ html, body {
   image-rendering: optimizeSpeed;
 }
 
-#topbar {
-  pointer-events: none;
-}
-
 #hud {
   display: none;
   position: fixed;
-  top: 12px;
-  left: 16px;
+  top: 14px;
+  left: 18px;
   gap: 18px;
-  font-size: 18px;
+  padding: 8px 20px;
+  background: rgba(11, 18, 36, 0.72);
+  border: 1px solid rgba(0, 210, 255, 0.28);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
+  letter-spacing: 0.03em;
   z-index: 65;
   white-space: nowrap;
   pointer-events: auto;
   align-items: center;
+  user-select: none;
 }
 
 body.playing #hud {
@@ -146,9 +151,10 @@ body.playing #hud {
 
 #menu .btns button.active {
   color: #fff;
-  background: linear-gradient(135deg, #00d2ff, #3a7bff 58%, #6d2df7);
+  background: linear-gradient(135deg, rgba(0, 210, 255, 0.35), rgba(58, 123, 255, 0.45));
+  border: 1px solid rgba(100, 220, 255, 0.65);
   box-shadow:
-    0 6px 20px rgba(0, 150, 255, 0.45),
+    0 4px 16px rgba(0, 160, 255, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
@@ -161,21 +167,25 @@ body.playing #hud {
   appearance: none;
   position: relative;
   overflow: hidden;
+  display: block;
   width: 100%;
-  min-height: 60px;
-  padding: 17px 26px;
+  max-width: 250px;
+  margin: 0 auto;
+  min-height: 52px;
+  padding: 14px 24px;
   font-family: inherit;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   color: #fff;
   cursor: pointer;
-  border: 1px solid rgba(140, 225, 255, 0.45);
+  border: 1px solid rgba(140, 225, 255, 0.55);
   border-radius: 999px;
-  background: linear-gradient(135deg, #00d2ff, #3a7bff 55%, #6d2df7);
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(135deg, #00d2ff 0%, #0077ff 52%, #7928ca 100%);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 150, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
   animation: startGlow 2.8s ease-in-out infinite;
-  transition: transform .16s ease, filter .2s ease;
+  transition: transform .16s ease, filter .2s ease, box-shadow .2s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -193,8 +203,8 @@ body.playing #hud {
 }
 
 @keyframes startGlow {
-  0%, 100% { box-shadow: 0 16px 40px rgba(0,160,255,.38), 0 0 26px rgba(109,45,247,.22), inset 0 1px 0 rgba(255,255,255,.32); }
-  50%      { box-shadow: 0 16px 44px rgba(0,190,255,.5),  0 0 46px rgba(109,45,247,.38), inset 0 1px 0 rgba(255,255,255,.36); }
+  0%, 100% { box-shadow: 0 12px 32px rgba(0, 160, 255, .38), 0 0 24px rgba(109, 45, 247, .24), inset 0 1px 0 rgba(255, 255, 255, .35); }
+  50%      { box-shadow: 0 14px 38px rgba(0, 190, 255, .52), 0 0 40px rgba(109, 45, 247, .40), inset 0 1px 0 rgba(255, 255, 255, .42); }
 }
 
 @keyframes sheen {
@@ -204,13 +214,13 @@ body.playing #hud {
 
 #start-btn:hover,
 #start-btn:focus-visible {
-  transform: translateY(-2px) scale(1.01);
+  transform: translateY(-2px) scale(1.02);
   filter: brightness(1.08);
   outline: none;
 }
 
 #start-btn:active {
-  transform: translateY(1px) scale(0.99);
+  transform: translateY(1px) scale(0.98);
   filter: brightness(0.96);
 }
 
@@ -220,8 +230,9 @@ body.playing #hud {
 }
 
 @media (max-width:480px) {
-  #menu .panel { padding: 20px; min-width: 260px; }
-  #hud { font-size: 14px; gap: 10px; left: 10px; top: 8px; }
+  #menu .panel { padding: 28px 20px; min-width: 260px; }
+  #start-btn { max-width: 100%; min-height: 48px; font-size: 17px; padding: 12px 20px; }
+  #hud { font-size: 13px; gap: 10px; left: 10px; top: 8px; padding: 6px 14px; }
 }
 
 /* 触摸设备下，确保触摸事件直接给到 Canvas，而不是被浏览器手势拦截 */
@@ -239,17 +250,6 @@ body.playing #hud {
   justify-content: center;
   pointer-events: auto;
   background: rgba(0,0,0,0.75);
-}
-
-#loading .spinner {
-  padding: 14px 22px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-  border: 1px solid rgba(255,255,255,0.04);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-  font-size: 16px;
-  color: #fff;
-  backdrop-filter: blur(4px);
 }
 
 /* Circular progress loader centered */
@@ -273,10 +273,6 @@ body.playing #hud {
   transform: rotate(-90deg); transform-origin: 50% 50%;
 }
 .progress-text { font-size:14px; font-weight:600; color:#fff; }
-
-/* Mobile fallback: hide old text spinner, ensure loader circle visible */
-#loading .spinner{display:none !important;}
-#loading .loader-circle{display:flex !important;}
 
 .sr-only {
   position: absolute !important;
