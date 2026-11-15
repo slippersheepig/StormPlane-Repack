@@ -9,14 +9,6 @@ html, body {
   color: #fff;
 }
 
-#bgCanvas {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
 #game-container {
   position: fixed;
   inset: 0;
@@ -30,7 +22,6 @@ html, body {
   display: block;
   z-index: 0;
   pointer-events: auto;
-  image-rendering: optimizeSpeed;
 }
 
 #hud {
@@ -58,7 +49,7 @@ html, body {
 }
 
 body.playing #hud {
-  display: flex !important;
+  display: flex;
 }
 
 #menu {
@@ -136,7 +127,7 @@ body.playing #hud {
   border-radius: 999px;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+  transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .15s ease;
 }
 
 #menu .btns button:hover {
