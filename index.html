@@ -3,14 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>沙漠风暴REPACK</title>
+  <title>沙漠风暴 REPACK</title>
   <link rel="icon" href="./img/planeicon.png" />
   <link rel="apple-touch-icon" href="./img/ic_launcher.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- 背景和游戏容器 -->
-  <canvas id="bgCanvas" aria-hidden="true"></canvas>
+  <!-- 游戏容器 -->
   <div id="game-container">
     <canvas id="game-canvas" tabindex="0" aria-label="游戏画布"></canvas>
   </div>
@@ -30,30 +29,6 @@
       <div class="sr-only">正在加载资源，请稍候...</div>
     </div>
   </div>
-  <script>
-  (function ensureLoader(){
-    try {
-      const ld = document.getElementById('loading');
-      if(!ld) return;
-      if(ld.querySelector && ld.querySelector('.spinner')) {
-        ld.innerHTML = `
-        <div class="loader-circle" role="presentation">
-          <svg class="progress" viewBox="0 0 36 36" aria-hidden="true">
-            <path class="bg" d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831a15.9155 15.9155 0 1 0 0-31.831"/>
-            <path class="meter" stroke-dasharray="0,100" d="M18 2.0845a15.9155 15.9155 0 1 0 0 31.831a15.9155 15.9155 0 1 0 0-31.831"/>
-          </svg>
-          <div class="progress-text">0%</div>
-          <div class="sr-only">正在加载资源，请稍候...</div>
-        </div>`;
-      }
-      try {
-        const s = document.createElement('style');
-        s.textContent = "#loading .spinner{display:none !important;} #loading .loader-circle{display:flex !important;}";
-        document.head.appendChild(s);
-      } catch(e){}
-    } catch(e){}
-  })();
-  </script>
   <!-- 首页菜单 -->
   <div id="menu">
     <div class="panel">
@@ -127,17 +102,17 @@
         './img/boss_bullet_sun_particle.png'
       ];
       window.PRELOADED_IMAGES = {};
-      // Progressive loader: count total assets and update UI
       const audios = [
-  './sound/game.mp3',
-  './sound/shoot.mp3',
-  './sound/explosion.mp3',
-  './sound/explosion2.wav',
-  './sound/explosion3.wav',
-  './sound/bigexplosion.wav',
-  './sound/get_goods.wav',
-  './sound/button.wav'
-];
+        './sound/game.mp3',
+        './sound/shoot.mp3',
+        './sound/explosion.mp3',
+        './sound/explosion2.wav',
+        './sound/explosion3.wav',
+        './sound/bigexplosion.wav',
+        './sound/get_goods.wav',
+        './sound/button.wav'
+      ];
+      // Progressive loader: count total assets and update UI
       const totalAssets = imgs.length + audios.length;
       let loadedAssets = 0;
       function updateProgress() {
@@ -157,7 +132,7 @@
 
       window.PRELOADED_AUDIO = {};
       await Promise.all(audios.map(p => new Promise(res => {
-       try {
+        try {
           const a = new Audio();
           a.preload = "auto";
           a.src = p;
@@ -179,7 +154,7 @@
           res(false);
         }
       })));
-  
+
       try {
         const pyodide = await loadPyodide();
         const utilsCode = await fetch("utils.py").then(r => r.text());
