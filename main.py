@@ -1,6 +1,7 @@
-from js import document, window, console, Math
+from js import document, window, console, Math, Image, Audio
 from pyodide.ffi import create_proxy
-from utils import rects_collide, clamp, randf, load_sprite
+from utils import rects_collide, clamp, randf
+
 
 # ---- safe remove helper to avoid "list.remove(x): x not in list" ----
 def safe_remove(seq, item):
@@ -8,6 +9,7 @@ def safe_remove(seq, item):
         seq.remove(item)
     except ValueError:
         pass
+
 
 # Lazily ensure canvas exists and return (canvas, ctx)
 def ensure_canvas_and_ctx():
@@ -30,8 +32,10 @@ def ensure_canvas_and_ctx():
         ctx = None
     return canvas, ctx
 
+
 # initialize global references (may create canvas if missing)
 canvas, ctx = ensure_canvas_and_ctx()
+
 
 def fit_canvas():
     container = document.getElementById("game-container")
@@ -48,11 +52,6 @@ def fit_canvas():
         # Fallback: entire viewport
         w = window.innerWidth or document.documentElement.clientWidth or 0
         h = window.innerHeight or document.documentElement.clientHeight or 0
-
-    try:
-        dpr = window.devicePixelRatio or 1
-    except Exception:
-        dpr = 1
 
     if ctx:
         try:
@@ -90,17 +89,12 @@ def fit_canvas():
     except Exception:
         pass
 
-# Run initial fit and register resize + DOMContentLoaded hooks
+
+# Run initial fit and register the resize handler
 fit_canvas()
 window.addEventListener("resize", create_proxy(lambda e: fit_canvas()))
-document.addEventListener("DOMContentLoaded", create_proxy(lambda e: fit_canvas()), {"once": True})
-try:
-    fit_canvas()
-except Exception:
-    pass
 
 # HUD elements
-hud = document.getElementById("hud")
 score_el = document.getElementById("score")
 lives_el = document.getElementById("lives")
 level_el = document.getElementById("level")
@@ -120,10 +114,7 @@ for i in range(diff_buttons.length):
         btn.classList.add("active")
         selected_diff = btn.getAttribute("data-diff")
     b.addEventListener("click", create_proxy(on_diff))
-# 预先设定普通难度为默认
-diff_buttons.item(1).classList.add("active")  # normal default
 
-game_over = False
 death_timer = 0  # >0 表示玩家死亡演出进行中
 state = "menu"  # 'menu' -> 'playing' -> 'gameover'
 INITIAL_BOSS_SCORE_THRESHOLD = 500
@@ -135,9 +126,9 @@ DIFF = {
     "hard":   {"enemy_rate": 0.03,  "enemy_speed": (2.6,3.6), "bullet_rate": 0.012, "boss_hp": 2400},
 }
 
-# --- Dynamic difficulty scaling (based on current score) ---
-# regardless of the initially selected difficulty.
+# --- Dynamic difficulty scaling (applies on top of the selected difficulty, based on current score) ---
 _DIFFICULTY_THRESHOLDS = [2000, 6000, 12000, 20000, 30000, 45000, 60000, 80000, 105000]
+
 
 def _difficulty_tier(sc):
     t = 0
@@ -147,6 +138,7 @@ def _difficulty_tier(sc):
         else:
             break
     return t
+
 
 def _scale_param(key, value, tier):
     # gentle but noticeable scaling; capped to keep the game fair
@@ -163,6 +155,7 @@ def _scale_param(key, value, tier):
         return int(value * (1 + 0.18 * tier))
     return value
 
+
 class _ParamView:
     def __init__(self, base):
         self._base = base
@@ -174,13 +167,15 @@ class _ParamView:
         tier = _difficulty_tier(int(sc))
         return _scale_param(k, self._base[k], tier)
 
+
 class _DiffProxy:
     def __init__(self, base):
         self._base = base
     def __getitem__(self, name):
         return _ParamView(self._base[name])
 
-# Replace static DIFF with proxy (keep original as _BASE_DIFF in case you need it)
+
+# Replace static DIFF with a proxy that scales params by the current score tier
 _BASE_DIFF = DIFF
 DIFF = _DiffProxy(_BASE_DIFF)
 
@@ -204,22 +199,26 @@ SOUND_RATE_LIMIT_MS = {
     "bigboom": 0,
 }
 _last_sound_at = {}
+
 TIER_TO_SPRITE = {
     "single": "player_blue",
     "twin":   "player_red",
     "spread": "player_purple",
 }
+
+
 def _apply_tier_sprite(plr):
     try:
         plr.sprite_key = TIER_TO_SPRITE.get(plr.weapon, plr.sprite_key)
     except Exception:
         pass
 
+
 IMG_BASE = "./img"
 SND_BASE = "./sound"
 
-# 将路径转成 Image 对象；若主名不存在则用已知别名兜底
-from js import Image
+
+# 将路径转为 Image 对象（优先复用页面预加载的缓存）
 def _to_img(path):
     try:
         if hasattr(window, "PRELOADED_IMAGES"):
@@ -247,6 +246,7 @@ def _to_img(path):
         return img
     except Exception:
         return None
+
 
 # 首选命名
 SPRITES = {
@@ -279,6 +279,7 @@ for k, p in list(SPRITES.items()):
     except Exception:
         SPRITES[k] = None
 
+
 def _fallback(key, *alts):
     if SPRITES.get(key) is not None:
         return
@@ -289,6 +290,7 @@ def _fallback(key, *alts):
         except Exception:
             continue
 
+
 _fallback("enemy_small", f"{IMG_BASE}/small.png")
 _fallback("enemy_big",   f"{IMG_BASE}/big.png")
 _fallback("enemy_medium",f"{IMG_BASE}/middle.png")
@@ -298,12 +300,11 @@ _fallback("explosion",   f"{IMG_BASE}/myplaneexplosion.png")
 _fallback("player_blue", f"{IMG_BASE}/myplane.png", f"{IMG_BASE}/fly.png")
 # 备选的武器道具图（存在就换）
 _fallback("power_weapon", f"{IMG_BASE}/bullet_goods2.png", f"{IMG_BASE}/purple_bullet_goods.png", f"{IMG_BASE}/red_bullet_goods.png")
-_fallback("power_shield", f"{IMG_BASE}/plane_shield.png")
-_fallback("power_heal",   f"{IMG_BASE}/life_goods.png")
 
 bg_offscreen = None
 _bg_offscreen_width = 0
 _bg_offscreen_height = 0
+
 
 def build_bg_offscreen():
     """Build a tall offscreen canvas (2x screen height) with a procedurally generated dark starfield."""
@@ -358,6 +359,7 @@ def build_bg_offscreen():
         except Exception:
             pass
 
+
 build_bg_offscreen()
 
 SOUNDS = {
@@ -371,7 +373,8 @@ SOUNDS = {
     "bigboom": f"{SND_BASE}/bigexplosion.wav",
 }
 
-# Helper: 播放声音
+
+# 播放声音（带播放频率限流）
 def play_sound(key, vol=0.7):
     try:
         now = window.performance.now()
@@ -403,7 +406,6 @@ def play_sound(key, vol=0.7):
             except Exception:
                 pass
         else:
-            from js import Audio
             if key not in SOUNDS or not SOUNDS[key]:
                 return
             a = Audio.new(SOUNDS[key])
@@ -411,6 +413,7 @@ def play_sound(key, vol=0.7):
         a.play()
     except Exception:
         pass
+
 
 class Player:
     def __init__(self):
@@ -424,7 +427,6 @@ class Player:
         self.weapon = "single"  # single | twin | spread
         self.shoot_cd = 0
         self.shield = 0  # frames
-        self.homing_combo = False
         self.clear_wave_timer = 0
         self.clear_wave_pulse_cd = 0
         self.alt_fire_cycle = 0
@@ -459,12 +461,6 @@ class Player:
         if len(bullets) >= MAX_BULLETS:
             return
 
-        if self.homing_combo:
-            bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 10, 0, -8, "player", bullet_type="normal", damage=14))
-            if len(bullets) < MAX_BULLETS:
-                bullets.append(Bullet(self.x + self.w/2 - 3, self.y - 12, 0, -6, "player", bullet_type="homing", homing=True, damage=16))
-            return
-
         # 每隔几轮发射一次高能激光弹，增加玩法层次但不打破基础节奏
         if self.weapon != "single" and self.alt_fire_cycle == 0:
             bullets.append(Bullet(self.x + self.w/2 - 4, self.y - 20, 0, -12, "player", bullet_type="laser", w=8, h=30, damage=30, ttl=24))
@@ -483,11 +479,6 @@ class Player:
             self.shield = max(0, self.shield - int(dmg * 20))
             return False
         self.hp -= dmg
-        if self.homing_combo:
-            self.homing_combo = False
-            self.weapon = "spread"
-            _apply_tier_sprite(self)
-            return True
         try:
             idx = WEAPON_TIERS.index(self.weapon)
         except Exception:
@@ -497,17 +488,18 @@ class Player:
             _apply_tier_sprite(self)
         return True
 
+
 class Enemy:
     def __init__(self, kind="small"):
         self.kind = kind
-        self.w = 36 if kind=="small" else (64 if kind=="big" else 48)
-        self.h = 36 if kind=="small" else (64 if kind=="big" else 48)
-        self.x = randf(0, canvas.width-self.w)
+        self.w = 36 if kind == "small" else (64 if kind == "big" else 48)
+        self.h = 36 if kind == "small" else (64 if kind == "big" else 48)
+        self.x = randf(0, canvas.width - self.w)
         self.y = -self.h - randf(0, 100)
         spd_min, spd_max = DIFF[selected_diff]["enemy_speed"]
         self.vx = randf(-0.6, 0.6)
         self.vy = randf(spd_min, spd_max)
-        self.hp = 15 if kind=="small" else (40 if kind=="big" else 28)
+        self.hp = 15 if kind == "small" else (40 if kind == "big" else 28)
         self.cd = 40  # shoot cooldown
     def draw(self):
         key = "enemy_small" if self.kind == "small" else ("enemy_big" if self.kind == "big" else "enemy_medium")
@@ -524,11 +516,11 @@ class Enemy:
     def update(self):
         self.x += self.vx
         self.y += self.vy
-        self.x = clamp(self.x, 0, canvas.width-self.w)
+        self.x = clamp(self.x, 0, canvas.width - self.w)
         # Shoot
         self.cd -= 1
-        if self.cd<=0:
-            self.cd = int(90 - 30*randf(0,1))
+        if self.cd <= 0:
+            self.cd = int(90 - 30 * randf(0, 1))
             if Math.random() < DIFF[selected_diff]["bullet_rate"]:
                 # fire at player
                 tx = player.x + player.w/2
@@ -537,22 +529,23 @@ class Enemy:
                 cy = self.y + self.h
                 vx = tx - cx
                 vy = ty - cy
-                mag = (vx*vx+vy*vy) ** 0.5 + 1e-5
-                vx, vy = vx/mag*3.0, vy/mag*3.0
+                mag = (vx*vx + vy*vy) ** 0.5 + 1e-5
+                vx, vy = vx / mag * 3.0, vy / mag * 3.0
                 if len(bullets) >= MAX_BULLETS:
                     return
                 if self.kind == "small":
-                    bullets.append(Bullet(cx-3, cy, vx, vy, "enemy", bullet_type="normal", damage=14))
+                    bullets.append(Bullet(cx - 3, cy, vx, vy, "enemy", bullet_type="normal", damage=14))
                 elif self.kind == "medium":
                     for off in (-0.35, 0, 0.35):
                         if len(bullets) >= MAX_BULLETS:
                             break
                         ang = Math.atan2(vy, vx) + off
-                        bullets.append(Bullet(cx-3, cy, 3.0*Math.cos(ang), 3.0*Math.sin(ang), "enemy", bullet_type="normal", sprite_key="boss_bullet_triangle", damage=12))
+                        bullets.append(Bullet(cx - 3, cy, 3.0 * Math.cos(ang), 3.0 * Math.sin(ang), "enemy", bullet_type="normal", sprite_key="boss_bullet_triangle", damage=12))
                 else:
-                    bullets.append(Bullet(cx-4, cy, vx*0.85, vy*0.85+0.3, "enemy", bullet_type="orb", sprite_key="boss_bullet_hellfire_yellow", w=10, h=10, damage=18))
+                    bullets.append(Bullet(cx - 4, cy, vx * 0.85, vy * 0.85 + 0.3, "enemy", bullet_type="orb", sprite_key="boss_bullet_hellfire_yellow", w=10, h=10, damage=18))
                     if len(bullets) < MAX_BULLETS and Math.random() < 0.35:
-                        bullets.append(Bullet(cx-4, cy, vx*0.6, vy*0.6, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_red", w=10, h=10, damage=16, homing=True, speed=3.2, turn_rate=0.2))
+                        bullets.append(Bullet(cx - 4, cy, vx * 0.6, vy * 0.6, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_red", w=10, h=10, damage=16, homing=True, speed=3.2, turn_rate=0.2))
+
 
 class Boss:
     def __init__(self):
@@ -581,13 +574,16 @@ class Boss:
             except Exception:
                 ctx.fillStyle = "#5522aa"
                 ctx.fillRect(self.x, self.y, self.w, self.h)
+        else:
+            ctx.fillStyle = "#5522aa"
+            ctx.fillRect(self.x, self.y, self.w, self.h)
 
         # HP bar
         ctx.fillStyle = "rgba(0,0,0,0.5)"
-        ctx.fillRect(20, 20, canvas.width-40, 12)
+        ctx.fillRect(20, 20, canvas.width - 40, 12)
         ctx.fillStyle = "#e33"
-        ratio = max(0, self.hp)/DIFF[selected_diff]["boss_hp"]
-        ctx.fillRect(20, 20, (canvas.width-40)*ratio, 12)
+        ratio = max(0, self.hp) / DIFF[selected_diff]["boss_hp"]
+        ctx.fillRect(20, 20, (canvas.width - 40) * ratio, 12)
     def update(self):
         # Enter from top, then patrol horizontally at y=40
         if self.y < 40:
@@ -600,10 +596,10 @@ class Boss:
                 self.x = clamp(self.x, 0, canvas.width - self.w)
         # Shoot pattern cycling
         self.cd -= 1
-        if self.cd<=0:
+        if self.cd <= 0:
             self.pattern_count += 1
             self.cd = max(52, 80 - self.pattern_count)
-            self.phase = (self.phase+1) % 4
+            self.phase = (self.phase + 1) % 4
             self.fire_pattern(self.phase)
     def fire_pattern(self, p):
         if len(bullets) >= MAX_BULLETS:
@@ -615,25 +611,25 @@ class Boss:
             for a in range(-40, 41, 10):
                 if len(bullets) >= MAX_BULLETS:
                     break
-                rad = (a/180.0)*Math.PI
-                vx, vy = 3*Math.sin(rad), 3*Math.cos(rad)
+                rad = (a/180.0) * Math.PI
+                vx, vy = 3 * Math.sin(rad), 3 * Math.cos(rad)
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_default"))
         elif p == 1:
             # aimed bursts
-            tx, ty = player.x+player.w/2, player.y+player.h/2
+            tx, ty = player.x + player.w/2, player.y + player.h/2
             for k in range(12):
                 if len(bullets) >= MAX_BULLETS:
                     break
-                ang = Math.atan2(ty-cy, tx-cx) + (k-6)*0.08
-                vx, vy = 3.2*Math.cos(ang), 3.2*Math.sin(ang)
+                ang = Math.atan2(ty - cy, tx - cx) + (k - 6) * 0.08
+                vx, vy = 3.2 * Math.cos(ang), 3.2 * Math.sin(ang)
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key=("boss_bullet_thunderball_red" if (k % 2 == 0) else "boss_bullet_thunderball_green")))
         elif p == 2:
             # spiral
             for k in range(24):
                 if len(bullets) >= MAX_BULLETS:
                     break
-                ang = k*0.26 + Math.random()*0.5
-                vx, vy = 2.6*Math.cos(ang), 2.6*Math.sin(ang)+0.8
+                ang = k * 0.26 + Math.random() * 0.5
+                vx, vy = 2.6 * Math.cos(ang), 2.6 * Math.sin(ang) + 0.8
                 bullets.append(Bullet(cx, cy, vx, vy, "enemy", sprite_key="boss_bullet_sun_particle", bullet_type="orb", damage=14))
         else:
             # 混合弹幕：中轴激光 + 两侧追踪弹
@@ -645,6 +641,7 @@ class Boss:
                 if len(bullets) >= MAX_BULLETS:
                     break
                 bullets.append(Bullet(cx + side, cy + 4, 0, 3.2, "enemy", bullet_type="homing", sprite_key="boss_bullet_thunderball_green", w=11, h=11, damage=18, homing=True, speed=3.4, turn_rate=0.16))
+
 
 class Bullet:
     def __init__(self, x, y, vx, vy, owner, sprite_key=None, w=None, h=None, homing=False, speed=None, bullet_type="normal", damage=12, ttl=0, turn_rate=0.4):
@@ -680,24 +677,21 @@ class Bullet:
             # Draw player shots procedurally instead of stretching tiny sprites.
             # This is cheaper in Pyodide than image lookups for every bullet and
             # gives the weapons a cleaner, brighter arcade look.
-            if self.bullet_type == "homing" or getattr(self, "homing", False):
-                outer = "rgba(100,210,255,0.35)"
-                inner = "#bff7ff"
-                core = "#ffffff"
-            elif player.weapon == "single":
-                outer = "rgba(255,80,70,0.35)"
-                inner = "#ff5a48"
-                core = "#ffd3c9"
-            elif getattr(player, "sprite_key", "") == "player_purple":
-                outer = "rgba(210,110,255,0.35)"
-                inner = "#d76cff"
-                core = "#fff0ff"
-            else:
+            # 弹色与机体涂装对应：蓝机蓝弹、红机红弹、紫机紫弹
+            if player.weapon == "single":
                 outer = "rgba(80,190,255,0.35)"
                 inner = "#4fd7ff"
                 core = "#ddfbff"
-            cx = self.x + self.w / 2
-            cy = self.y + self.h / 2
+            elif player.weapon == "twin":
+                outer = "rgba(255,80,70,0.35)"
+                inner = "#ff5a48"
+                core = "#ffd3c9"
+            else:
+                outer = "rgba(210,110,255,0.35)"
+                inner = "#d76cff"
+                core = "#fff0ff"
+            cx = self.x + self.w/2
+            cy = self.y + self.h/2
             try:
                 ctx.fillStyle = outer
                 ctx.beginPath()
@@ -740,7 +734,8 @@ class Bullet:
                         dy = (e.y + e.h/2) - (self.y + self.h/2)
                         d2 = dx*dx + dy*dy
                         if d2 < nearest_d2:
-                            nearest_d2 = d2; nearest = e
+                            nearest_d2 = d2
+                            nearest = e
                     target = nearest
             else:
                 target = player
@@ -750,15 +745,15 @@ class Bullet:
                 try:
                     dist = Math.sqrt(dx*dx + dy*dy) or 1
                 except Exception:
-                    dist = (abs(dx)+abs(dy)) or 1
+                    dist = (abs(dx) + abs(dy)) or 1
                 spd = getattr(self, "speed", None)
-                if not spd or spd<=0:
+                if not spd or spd <= 0:
                     spd = 7.0
                 desired_vx = dx / dist * spd
                 desired_vy = dy / dist * spd
                 turn_rate = getattr(self, "turn_rate", 0.4)
-                self.vx = self.vx*(1-turn_rate) + desired_vx*turn_rate
-                self.vy = self.vy*(1-turn_rate) + desired_vy*turn_rate
+                self.vx = self.vx * (1 - turn_rate) + desired_vx * turn_rate
+                self.vy = self.vy * (1 - turn_rate) + desired_vy * turn_rate
 
         if self.bullet_type == "orb":
             self.vx *= 0.997
@@ -769,6 +764,7 @@ class Bullet:
         if self.ttl and self.ttl > 0:
             self.ttl -= 1
 
+
 class PowerUp:
     def __init__(self, kind, x, y):
         self.kind = kind  # weapon | shield | heal
@@ -776,14 +772,16 @@ class PowerUp:
         self.w, self.h = 28, 28
         self.vy = 2.0
     def draw(self):
-        key = "power_"+self.kind
+        key = "power_" + self.kind
         img = SPRITES.get(key)
-        if img: ctx.drawImage(img, self.x, self.y, self.w, self.h)
+        if img:
+            ctx.drawImage(img, self.x, self.y, self.w, self.h)
         else:
-            ctx.fillStyle = {"weapon":"#0bf","shield":"#0cf","heal":"#0b5"}[self.kind]
+            ctx.fillStyle = {"weapon": "#0bf", "shield": "#0cf", "heal": "#0b5"}[self.kind]
             ctx.fillRect(self.x, self.y, self.w, self.h)
     def update(self):
         self.y += self.vy
+
 
 class Explosion:
     def __init__(self, x, y, sprite_key=None, size=40):
@@ -796,25 +794,26 @@ class Explosion:
         if img is None:
             img = SPRITES.get("explosion")
         half = getattr(self, "size", 40) / 2
-        alpha = min(1.0, max(0.0, self.t / 12))
+        alpha = min(1.0, max(0.0, self.t/12))
         if img:
             try:
                 ctx.globalAlpha = alpha
-                ctx.drawImage(img, self.x-half, self.y-half, half*2, half*2)
+                ctx.drawImage(img, self.x - half, self.y - half, half * 2, half * 2)
                 ctx.globalAlpha = 1.0
             except Exception:
                 ctx.globalAlpha = 1.0
-                ctx.fillStyle = f"rgba(255,150,0,{self.t/24})"
+                ctx.fillStyle = f"rgba(255, 150, 0,{self.t/24})"
                 ctx.beginPath()
-                ctx.arc(self.x, self.y, (24-self.t)+10, 0, Math.PI*2)
+                ctx.arc(self.x, self.y, (24 - self.t) + 10, 0, Math.PI * 2)
                 ctx.fill()
         else:
-            ctx.fillStyle = f"rgba(255,150,0,{self.t/24})"
+            ctx.fillStyle = f"rgba(255, 150, 0,{self.t/24})"
             ctx.beginPath()
-            ctx.arc(self.x, self.y, (24-self.t)+10, 0, Math.PI*2)
+            ctx.arc(self.x, self.y, (24 - self.t) + 10, 0, Math.PI * 2)
             ctx.fill()
     def update(self):
         self.t -= 1
+
 
 def add_explosion(x, y, sprite_key=None, size=40):
     if len(effects) >= MAX_EFFECTS:
@@ -822,10 +821,21 @@ def add_explosion(x, y, sprite_key=None, size=40):
     effects.append(Explosion(x, y, sprite_key=sprite_key, size=size))
 
 
+_hud_last = {}
+
+
+def _set_hud_text(el, key, text):
+    # 仅在文本变化时写入 DOM，避免每帧三次无效的 innerText 赋值
+    if _hud_last.get(key) != text:
+        _hud_last[key] = text
+        el.innerText = text
+
+
 def update_hud():
-    score_el.innerText = f"分数：{int(score)}"
-    lives_el.innerText = f"生命：{player.hp}"
-    level_el.innerText = f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}｜动态+{_difficulty_tier(int(score))}"
+    _set_hud_text(score_el, "score", f"分数：{int(score)}")
+    _set_hud_text(lives_el, "lives", f"生命：{max(0, player.hp)}")
+    _set_hud_text(level_el, "level", f"难度：{DIFF_NAME_ZH.get(selected_diff, selected_diff)}｜动态+{_difficulty_tier(int(score))}")
+
 
 def spawn_enemy():
     if len(enemies) >= MAX_ENEMIES:
@@ -834,31 +844,32 @@ def spawn_enemy():
     kind = "small" if r < 0.55 else ("medium" if r < 0.85 else "big")
     enemies.append(Enemy(kind))
 
+
 def spawn_power(x, y):
     if len(powers) >= MAX_POWERS:
         return
     r = Math.random()
-    kind = "weapon" if r<0.5 else ("shield" if r<0.8 else "heal")
+    kind = "weapon" if r < 0.5 else ("shield" if r < 0.8 else "heal")
     powers.append(PowerUp(kind, x, y))
+
 
 def trigger_clear_wave():
     player.clear_wave_timer = CLEAR_WAVE_DURATION
     player.clear_wave_pulse_cd = 0
 
+
 def _defeat_boss():
     global boss, score, spawn_boss_at, shake
     score += 300
-    bx, by = boss.x+boss.w/2, boss.y+boss.h/2
+    bx, by = boss.x + boss.w/2, boss.y + boss.h/2
     add_explosion(bx, by, sprite_key="explosion_big", size=110)
-    for off_x, off_y in ((-40,-20),(36,-24),(-30,26),(44,18),(0,-46)):
-        add_explosion(bx+off_x, by+off_y, size=64)
+    for off_x, off_y in ((-40, -20), (36, -24), (-30, 26), (44, 18), (0, -46)):
+        add_explosion(bx + off_x, by + off_y, size=64)
     play_sound("bigboom", 0.6)
     shake = max(shake, 16)
     boss = None
-    try:
-        spawn_boss_at = score + 1000
-    except Exception:
-        pass
+    spawn_boss_at = score + 1000
+
 
 def run_clear_wave():
     global shake, score
@@ -875,8 +886,7 @@ def run_clear_wave():
 
     for e in enemies[:]:
         add_explosion(e.x + e.w/2, e.y + e.h/2)
-        score_gain = 10 if e.kind == "small" else 25
-        score += score_gain
+        score += 10 if e.kind == "small" else 25
         safe_remove(enemies, e)
 
     for eb in [bb for bb in bullets if bb.owner == "enemy"]:
@@ -889,16 +899,19 @@ def run_clear_wave():
         if boss.hp <= 0:
             _defeat_boss()
 
+
 spawn_boss_at = INITIAL_BOSS_SCORE_THRESHOLD
 boss = None
+
 
 def maybe_spawn_boss():
     global boss
     if boss is None and score >= spawn_boss_at:
         boss = Boss()
 
+
 def reset_game():
-    global player, enemies, bullets, powers, effects, boss, score, frame, game_over, shake, spawn_boss_at, death_timer
+    global player, enemies, bullets, powers, effects, boss, score, frame, shake, spawn_boss_at, death_timer
     player = Player()
     _apply_tier_sprite(player)
     try:
@@ -915,12 +928,14 @@ def reset_game():
     frame = 0
     shake = 0
     spawn_boss_at = INITIAL_BOSS_SCORE_THRESHOLD
-    game_over = False
     death_timer = 0
+
 
 # Touch controls: drag to move, tap to shoot
 touch_active = False
 touch_id = None
+
+
 def setup_controls():
     def keydown(e):
         k = e.key
@@ -951,8 +966,8 @@ def setup_controls():
         rect = canvas.getBoundingClientRect()
         px = t.clientX - rect.left
         py = t.clientY - rect.top
-        player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
-        player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+        player.x = clamp(px - player.w/2, 0, canvas.width - player.w)
+        player.y = clamp(py - player.h/2, 0, canvas.height - player.h)
         try:
             e.preventDefault()
         except Exception:
@@ -972,8 +987,8 @@ def setup_controls():
                 rect = canvas.getBoundingClientRect()
                 px = t.clientX - rect.left
                 py = t.clientY - rect.top
-                player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
-                player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+                player.x = clamp(px - player.w/2, 0, canvas.width - player.w)
+                player.y = clamp(py - player.h/2, 0, canvas.height - player.h)
                 try:
                     e.preventDefault()
                 except Exception:
@@ -996,8 +1011,8 @@ def setup_controls():
         rect = canvas.getBoundingClientRect()
         px = e.clientX - rect.left
         py = e.clientY - rect.top
-        player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
-        player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+        player.x = clamp(px - player.w/2, 0, canvas.width - player.w)
+        player.y = clamp(py - player.h/2, 0, canvas.height - player.h)
         try:
             e.preventDefault()
         except Exception:
@@ -1010,8 +1025,8 @@ def setup_controls():
             rect = canvas.getBoundingClientRect()
             px = e.clientX - rect.left
             py = e.clientY - rect.top
-            player.x = clamp(px - player.w/2, 0, canvas.width-player.w)
-            player.y = clamp(py - player.h/2, 0, canvas.height-player.h)
+            player.x = clamp(px - player.w/2, 0, canvas.width - player.w)
+            player.y = clamp(py - player.h/2, 0, canvas.height - player.h)
             try:
                 e.preventDefault()
             except Exception:
@@ -1048,6 +1063,7 @@ def setup_controls():
     except Exception:
         pass
 
+
 setup_controls()
 
 player = Player()
@@ -1060,20 +1076,23 @@ score = 0
 frame = 0
 bg_offset = 0
 shake = 0
-keys = {"ArrowLeft":False,"ArrowRight":False,"ArrowUp":False,"ArrowDown":False,"Space":False}
+keys = {"ArrowLeft": False, "ArrowRight": False, "ArrowUp": False, "ArrowDown": False}
 
 PLAYER_HIT_RADIUS = 12
 
+
 def _obj_center(obj):
-    w = getattr(obj, 'w', getattr(obj, 'width', 0))
-    h = getattr(obj, 'h', getattr(obj, 'height', 0))
+    w = getattr(obj, "w", getattr(obj, "width", 0))
+    h = getattr(obj, "h", getattr(obj, "height", 0))
     return obj.x + w / 2, obj.y + h / 2
+
 
 def player_center_hit(obj, radius=PLAYER_HIT_RADIUS):
     px, py = _obj_center(player)
     ox, oy = _obj_center(obj)
     dx, dy = ox - px, oy - py
     return dx*dx + dy*dy <= radius*radius
+
 
 def draw_bg():
     global bg_offset, bg_offscreen, _bg_offscreen_width, _bg_offscreen_height
@@ -1110,27 +1129,36 @@ def draw_bg():
     # Fallback: flat black fill to avoid banding
     try:
         ctx.fillStyle = "#000000"
-        ctx.fillRect(0,0,canvas.width,canvas.height)
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
     except Exception:
         pass
 
+
 def update():
-    global frame, score, game_over, shake, boss, spawn_boss_at, death_timer
+    global frame, score, shake, boss, spawn_boss_at, death_timer
     if state == "menu":
         window.requestAnimationFrame(_raf_proxy)
         return
 
+    # 屏幕震动：帧首重置变换并施加随机偏移，下一帧自动复位，不会泄漏画布状态
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    if shake > 0:
+        shake -= 1
+        amp = min(3.0, 1.0 + shake * 0.12)
+        ctx.translate(randf(-amp, amp), randf(-amp, amp))
+
     # Background
     draw_bg()
 
-    # Player move by keys
-    dx = (keys["ArrowRight"]-keys["ArrowLeft"])*player.speed
-    dy = (keys["ArrowDown"]-keys["ArrowUp"])*player.speed
-    player.x = clamp(player.x+dx, 0, canvas.width-player.w)
-    player.y = clamp(player.y+dy, 0, canvas.height-player.h)
+    # Player move by keys（死亡演出期间冻结操作）
+    if player.hp > 0:
+        dx = (keys["ArrowRight"] - keys["ArrowLeft"]) * player.speed
+        dy = (keys["ArrowDown"] - keys["ArrowUp"]) * player.speed
+        player.x = clamp(player.x + dx, 0, canvas.width - player.w)
+        player.y = clamp(player.y + dy, 0, canvas.height - player.h)
 
-    # Shooting：自动连射（无需按键）
-    player.shoot()
+        # Shooting：自动连射（无需按键）
+        player.shoot()
     if player.shoot_cd > 0:
         player.shoot_cd -= 1
     if player.shield > 0:
@@ -1188,52 +1216,41 @@ def update():
                 if e.hp <= 0:
                     score += 10 if e.kind == "small" else 25
                     if Math.random() < 0.25:
-                        spawn_power(e.x + e.w / 2, e.y + e.h / 2)
+                        spawn_power(e.x + e.w/2, e.y + e.h/2)
                     safe_remove(enemies, e)
                 break
         if boss and rects_collide(b, boss):
             add_explosion(b.x, b.y)
             play_sound("boom2", 0.25)
-            try:
-                safe_remove(bullets, b)
-            except Exception:
-                pass
-            try:
-                boss.hp -= getattr(b, "damage", 12)
-            except Exception:
-                boss.hp = 0
+            safe_remove(bullets, b)
+            boss.hp -= getattr(b, "damage", 12)
             score += 2
-
             if boss.hp <= 0:
                 _defeat_boss()
 
     # Enemy bullets vs player
-    for b in [bb for bb in bullets if bb.owner=="enemy"]:
-        if player_center_hit(b):
+    for b in [bb for bb in bullets if bb.owner == "enemy"]:
+        if player.hp > 0 and player_center_hit(b):
             damaged = player.hit(getattr(b, "damage", 15))
             safe_remove(bullets, b)
             if damaged:
-                add_explosion(player.x+player.w/2, player.y+player.h/2)
+                add_explosion(player.x + player.w/2, player.y + player.h/2)
                 play_sound("boom", 0.25)
                 shake = 8
-            else:
-                pass
 
     # Enemy body vs player
     for e in enemies[:]:
-        if player_center_hit(e):
+        if player.hp > 0 and player_center_hit(e):
             damaged = player.hit(25)
             safe_remove(enemies, e)
             if damaged:
-                add_explosion(player.x+player.w/2, player.y+player.h/2)
+                add_explosion(player.x + player.w/2, player.y + player.h/2)
                 play_sound("boom", 0.25)
                 shake = 10
-            else:
-                pass
 
     # Power pickup
     for p in powers[:]:
-        if rects_collide(p, player):
+        if player.hp > 0 and rects_collide(p, player):
             play_sound("pickup", 0.35)
             if p.kind == "weapon":
                 if player.weapon == "single":
@@ -1244,14 +1261,10 @@ def update():
                     _apply_tier_sprite(player)
                 else:
                     trigger_clear_wave()
-                try:
-                    delattr(player, "fallback_single")
-                except Exception:
-                    pass
-            elif p.kind=="shield":
+            elif p.kind == "shield":
                 player.shield = 300
             else:
-                player.hp = min(100, player.hp+30)
+                player.hp = min(100, player.hp + 30)
             safe_remove(powers, p)
 
     # Draw player last
@@ -1264,7 +1277,7 @@ def update():
         ctx.strokeStyle = f"rgba(120,220,255,{alpha})"
         ctx.lineWidth = 4
         ctx.beginPath()
-        ctx.arc(player.x + player.w/2, player.y + player.h/2, radius, 0, Math.PI*2)
+        ctx.arc(player.x + player.w/2, player.y + player.h/2, radius, 0, Math.PI * 2)
         ctx.stroke()
         ctx.restore()
 
@@ -1275,13 +1288,6 @@ def update():
         if fx.t <= 0:
             safe_remove(effects, fx)
 
-    # Shake (装饰)
-    if shake > 0:
-        shake -= 1
-        ctx.save()
-        ctx.translate(randf(-2,2), randf(-2,2))
-        ctx.restore()
-
     frame += 1
     score += 0.03  # time bonus
     update_hud()
@@ -1291,8 +1297,8 @@ def update():
         if death_timer == 0:
             px, py = player.x + player.w/2, player.y + player.h/2
             add_explosion(px, py, sprite_key="explosion_big", size=100)
-            for off_x, off_y in ((-22,-12),(20,-16),(-6,18),(14,10)):
-                add_explosion(px+off_x, py+off_y)
+            for off_x, off_y in ((-22, -12), (20, -16), (-6, 18), (14, 10)):
+                add_explosion(px + off_x, py + off_y)
             shake = 20
             play_sound("bigboom", 0.6)
             death_timer = 50
@@ -1307,10 +1313,10 @@ def update():
 
     window.requestAnimationFrame(_raf_proxy)
 
+
 def end_game():
-    global state, game_over
+    global state
     state = "gameover"
-    game_over = True
     document.body.classList.remove("playing")
 
     try:
@@ -1341,26 +1347,23 @@ def end_game():
         menu.style.display = "flex"
     window.setTimeout(create_proxy(show_menu), 900)
 
+
 # Hook start button
 def on_start(evt):
     global state
     play_sound("button", 0.4)
     menu.style.display = "none"
     try:
-        document.getElementById('game-canvas').focus()
+        document.getElementById("game-canvas").focus()
     except Exception:
         pass
     # Try to start background music (looped); use a persistent Audio object on window
     try:
-        from js import Audio
-        try:
-            if hasattr(window, '__bgm_audio') and window.__bgm_audio:
-                try:
-                    window.__bgm_audio.pause()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        if hasattr(window, "__bgm_audio") and window.__bgm_audio:
+            try:
+                window.__bgm_audio.pause()
+            except Exception:
+                pass
         if "bgm" in SOUNDS and SOUNDS.get("bgm"):
             a = Audio.new(SOUNDS.get("bgm"))
             try:
@@ -1399,8 +1402,9 @@ def on_start(evt):
     state = "playing"
     window.requestAnimationFrame(_raf_proxy)
 
+
 start_btn.addEventListener("click", create_proxy(on_start))
-# —— 同步用户可能在 Pyodide 初始化期间的点击/选择 —— 
+# —— 同步用户在 Pyodide 初始化期间选择的难度 ——
 try:
     if hasattr(window, "__desiredDifficulty") and window.__desiredDifficulty:
         # 让 Python 端的选中状态与菜单一致
@@ -1421,12 +1425,6 @@ try:
 except Exception:
     pass
 
-try:
-    if hasattr(window, "__startClicked") and window.__startClicked:
-        on_start(None)
-        window.__startClicked = False
-except Exception:
-    pass
 
 # Initial render (menu visible)
 def first_frame():
@@ -1434,5 +1432,15 @@ def first_frame():
     ctx.fillStyle = "rgba(0,0,0,0.45)"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
+
 _raf_proxy = create_proxy(lambda *_: update())
 first_frame()
+
+# 若用户在 Pyodide 就绪前已点击“开始游戏”，模块加载完成后立即自动开局。
+# 注意：必须放在 _raf_proxy 定义之后，否则 on_start 引用未定义变量导致游戏冻结。
+try:
+    if hasattr(window, "__startClicked") and window.__startClicked:
+        on_start(None)
+        window.__startClicked = False
+except Exception:
+    pass
