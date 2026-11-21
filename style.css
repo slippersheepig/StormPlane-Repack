@@ -1,57 +1,321 @@
-html, body {
+:root {
+  --bg-deep: #030712;
+  --panel-top: rgba(15, 25, 52, 0.88);
+  --panel-bottom: rgba(7, 12, 28, 0.84);
+  --border-glow: rgba(96, 212, 255, 0.28);
+  --accent-cyan: #00dcff;
+  --accent-blue: #2563eb;
+  --accent-purple: #8b5cf6;
+  --accent-red: #ff4d5a;
+  --accent-emerald: #10d99e;
+  --text-main: #f3f8ff;
+  --text-muted: rgba(210, 228, 255, 0.68);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
-  font-family: 'Segoe UI', sans-serif;
-  color: #fff;
+  background: var(--bg-deep);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ====== 游戏画布 ====== */
 #game-container {
   position: fixed;
   inset: 0;
   z-index: 0;
-  display: block;
   pointer-events: none;
 }
+
 #game-canvas {
   width: 100%;
   height: 100%;
   display: block;
-  z-index: 0;
   pointer-events: auto;
+  outline: none;
 }
 
+#game-container,
+#game-canvas,
+canvas {
+  touch-action: none;
+}
+
+/* ====== 战斗 HUD ====== */
 #hud {
   display: none;
   position: fixed;
   top: 14px;
-  left: 18px;
-  gap: 18px;
-  padding: 8px 20px;
-  background: rgba(11, 18, 36, 0.72);
-  border: 1px solid rgba(0, 210, 255, 0.28);
+  left: 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(8, 15, 34, 0.76);
+  border: 1px solid rgba(56, 200, 255, 0.3);
   border-radius: 999px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  font-size: 16px;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 14px;
   font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   z-index: 65;
   white-space: nowrap;
-  pointer-events: auto;
-  align-items: center;
   user-select: none;
+  pointer-events: none;
 }
 
-body.playing #hud {
+body.playing #hud,
+body.playing #hud-controls {
   display: flex;
 }
 
+.hud-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.hud-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.hud-value {
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.hud-score .hud-value {
+  color: #fde047;
+  font-size: 15px;
+  text-shadow: 0 0 10px rgba(253, 224, 71, 0.35);
+}
+
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(148, 197, 255, 0.22);
+}
+
+.hp-bar-track {
+  width: 78px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.hp-bar-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10d99e 0%, #00dcff 100%);
+  box-shadow: 0 0 10px rgba(0, 220, 255, 0.45);
+  transition: width 0.15s ease, background 0.2s ease;
+}
+
+#hp-wrap.low .hp-bar-fill {
+  background: linear-gradient(90deg, #ef4444 0%, #fb923c 100%);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.65);
+  animation: hpDangerPulse 0.8s ease-in-out infinite;
+}
+
+#hp-wrap.low #lives {
+  color: #ff7b82;
+}
+
+#hp-wrap.shielded .hp-bar-track {
+  box-shadow:
+    0 0 0 1.5px rgba(56, 232, 255, 0.85),
+    0 0 12px rgba(56, 232, 255, 0.5);
+}
+
+.weapon-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(79, 215, 255, 0.5);
+  color: #bff5ff;
+  background: rgba(0, 180, 255, 0.2);
+}
+
+.weapon-pill[data-tier="twin"] {
+  border-color: rgba(255, 108, 92, 0.6);
+  color: #ffd6d0;
+  background: rgba(255, 78, 62, 0.24);
+}
+
+.weapon-pill[data-tier="spread"] {
+  border-color: rgba(208, 120, 255, 0.65);
+  color: #f4d6ff;
+  background: rgba(168, 85, 247, 0.28);
+}
+
+.hud-level .hud-value {
+  font-size: 13px;
+  color: rgba(215, 234, 255, 0.9);
+}
+
+@keyframes hpDangerPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ====== 右上角快捷控制钮 ====== */
+#hud-controls {
+  display: none;
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  gap: 8px;
+  z-index: 66;
+}
+
+.icon-btn {
+  appearance: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(96, 212, 255, 0.3);
+  background: rgba(8, 15, 34, 0.74);
+  color: var(--text-main);
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform 0.14s ease, border-color 0.18s ease, background 0.18s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn:hover {
+  border-color: rgba(0, 220, 255, 0.75);
+  background: rgba(16, 32, 68, 0.88);
+  transform: translateY(-1px);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn.muted {
+  color: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* ====== 暂停浮层 ====== */
+#pause-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 68;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 7, 18, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+body.paused #pause-overlay {
+  display: flex;
+}
+
+.pause-panel {
+  width: min(88vw, 330px);
+  padding: 30px 28px 26px;
+  text-align: center;
+  border-radius: 22px;
+  background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+}
+
+.pause-panel h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+}
+
+.pause-tip {
+  margin: 0 0 22px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.pause-actions .primary-btn {
+  width: 200px;
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.ghost-btn {
+  appearance: none;
+  width: 200px;
+  min-height: 40px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 210, 255, 0.28);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(235, 245, 255, 0.86);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.14s ease;
+}
+
+.ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(148, 210, 255, 0.55);
+}
+
+.ghost-btn:active {
+  transform: scale(0.97);
+}
+
+/* ====== 首页菜单 ====== */
 #menu {
   z-index: 70;
   position: fixed;
@@ -60,8 +324,7 @@ body.playing #hud {
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  padding: 24px;
-  box-sizing: border-box;
+  padding: 20px;
 }
 
 #menu::before {
@@ -69,119 +332,248 @@ body.playing #hud {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 22%, rgba(0, 210, 255, 0.18), transparent 30%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.62));
+    radial-gradient(circle at 50% 24%, rgba(0, 215, 255, 0.16), transparent 42%),
+    radial-gradient(circle at 50% 82%, rgba(124, 58, 237, 0.12), transparent 44%),
+    linear-gradient(180deg, rgba(2, 6, 18, 0.18), rgba(2, 6, 18, 0.66));
   pointer-events: none;
 }
 
 #menu .panel {
   position: relative;
-  width: min(92vw, 460px);
-  padding: 44px 42px 38px;
+  width: min(92vw, 430px);
+  padding: 34px 34px 28px;
   text-align: center;
   background:
-    linear-gradient(180deg, rgba(17, 25, 47, 0.86), rgba(7, 10, 24, 0.78)),
-    radial-gradient(circle at top, rgba(0, 210, 255, 0.16), transparent 55%);
-  border: 1px solid rgba(135, 219, 255, 0.22);
-  border-radius: 28px;
+    linear-gradient(180deg, var(--panel-top), var(--panel-bottom)),
+    radial-gradient(circle at top, rgba(0, 220, 255, 0.18), transparent 58%);
+  border: 1px solid var(--border-glow);
+  border-radius: 26px;
   box-shadow:
-    0 28px 80px rgba(0, 0, 0, 0.62),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 0 40px rgba(0, 210, 255, 0.08) inset;
-  backdrop-filter: blur(14px);
+    0 28px 80px rgba(0, 0, 0, 0.68),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 38px rgba(0, 210, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+#menu .panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #00e5ff, #8b5cf6, transparent);
+}
+
+.panel-emblem {
+  width: 66px;
+  height: 66px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 42%, rgba(0, 220, 255, 0.24), rgba(15, 28, 60, 0.85));
+  border: 1px solid rgba(96, 220, 255, 0.42);
+  box-shadow:
+    0 10px 26px rgba(0, 170, 255, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.panel-emblem img {
+  display: block;
+  filter: drop-shadow(0 4px 10px rgba(0, 220, 255, 0.55));
+  animation: emblemHover 3.2s ease-in-out infinite;
+}
+
+@keyframes emblemHover {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 #menu .panel h1 {
-  margin: 0 0 28px;
-  letter-spacing: 0.08em;
-  font-size: clamp(30px, 6vw, 44px);
-  line-height: 1.08;
-  text-shadow: 0 0 22px rgba(0, 210, 255, 0.42), 0 2px 0 rgba(0, 0, 0, 0.5);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  line-height: 1.1;
 }
 
-/* ===== 难度选择：分段控制器（segmented control）===== */
+.title-main {
+  font-size: clamp(30px, 6vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  background: linear-gradient(180deg, #ffffff 12%, #a8ecff 64%, #52b7ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(0, 210, 255, 0.35));
+}
+
+.title-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+  color: #d8f6ff;
+  background: linear-gradient(135deg, rgba(0, 210, 255, 0.26), rgba(139, 92, 246, 0.34));
+  border: 1px solid rgba(110, 222, 255, 0.48);
+  box-shadow: 0 0 14px rgba(0, 195, 255, 0.22);
+}
+
+.menu-record {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 18px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 210, 255, 0.18);
+}
+
+.menu-record[hidden] {
+  display: none;
+}
+
+.menu-record strong {
+  color: #fde047;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-sep {
+  opacity: 0.45;
+}
+
+/* ====== 难度分段选择器 ====== */
 #menu .btns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-  margin: 0 0 26px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 6px;
+  width: 100%;
+  max-width: 336px;
+  margin: 0 auto 12px;
+  padding: 5px;
+  background: rgba(4, 10, 26, 0.62);
+  border: 1px solid rgba(140, 200, 255, 0.16);
   border-radius: 999px;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 #menu .btns button {
   appearance: none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   font-family: inherit;
   font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.66);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-indent: 0.06em;
+  color: rgba(210, 228, 255, 0.68);
   background: transparent;
-  min-height: 44px;
-  padding: 11px 10px;
+  min-height: 40px;
+  padding: 8px 10px;
   border-radius: 999px;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .15s ease;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease;
 }
 
 #menu .btns button:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 #menu .btns button:focus-visible {
-  outline: 2px solid rgba(0, 210, 255, 0.65);
+  outline: 2px solid rgba(0, 220, 255, 0.72);
   outline-offset: -2px;
 }
 
 #menu .btns button.active {
   color: #fff;
-  background: linear-gradient(135deg, rgba(0, 210, 255, 0.35), rgba(58, 123, 255, 0.45));
-  border: 1px solid rgba(100, 220, 255, 0.65);
+  background: linear-gradient(135deg, rgba(0, 200, 255, 0.62), rgba(37, 99, 235, 0.72));
+  border-color: rgba(125, 232, 255, 0.78);
   box-shadow:
-    0 4px 16px rgba(0, 160, 255, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    0 4px 16px rgba(0, 165, 255, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+#menu .btns button[data-diff="easy"].active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.68), rgba(6, 182, 212, 0.72));
+  border-color: rgba(110, 245, 208, 0.78);
+  box-shadow:
+    0 4px 16px rgba(16, 185, 129, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+#menu .btns button[data-diff="hard"].active {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.72), rgba(239, 68, 68, 0.78));
+  border-color: rgba(255, 168, 128, 0.8);
+  box-shadow:
+    0 4px 16px rgba(239, 68, 68, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
 }
 
 #menu .btns button:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
-/* ===== 开始游戏按钮 ===== */
-#start-btn {
+.diff-desc {
+  margin: 0 0 22px;
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ====== 主操作按钮 ====== */
+.primary-btn {
   appearance: none;
   position: relative;
   overflow: hidden;
   display: block;
-  width: 100%;
-  max-width: 250px;
+  width: 224px;
+  max-width: 100%;
   margin: 0 auto;
-  min-height: 52px;
-  padding: 14px 24px;
+  min-height: 48px;
+  padding: 12px 24px;
   font-family: inherit;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
   color: #fff;
   cursor: pointer;
-  border: 1px solid rgba(140, 225, 255, 0.55);
+  border: 1px solid rgba(155, 232, 255, 0.65);
   border-radius: 999px;
-  background: linear-gradient(135deg, #00d2ff 0%, #0077ff 52%, #7928ca 100%);
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  box-shadow: 0 10px 30px rgba(0, 150, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: linear-gradient(135deg, #00d8ff 0%, #1d7cff 52%, #7c3aed 100%);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 10px 28px rgba(0, 150, 255, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38);
   animation: startGlow 2.8s ease-in-out infinite;
-  transition: transform .16s ease, filter .2s ease, box-shadow .2s ease;
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
-#start-btn::after {
+.primary-btn::after {
   content: "";
   position: absolute;
   top: 0;
@@ -194,85 +586,242 @@ body.playing #hud {
 }
 
 @keyframes startGlow {
-  0%, 100% { box-shadow: 0 12px 32px rgba(0, 160, 255, .38), 0 0 24px rgba(109, 45, 247, .24), inset 0 1px 0 rgba(255, 255, 255, .35); }
-  50%      { box-shadow: 0 14px 38px rgba(0, 190, 255, .52), 0 0 40px rgba(109, 45, 247, .40), inset 0 1px 0 rgba(255, 255, 255, .42); }
+  0%, 100% {
+    box-shadow:
+      0 10px 28px rgba(0, 160, 255, 0.38),
+      0 0 22px rgba(124, 58, 237, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  }
+  50% {
+    box-shadow:
+      0 12px 36px rgba(0, 195, 255, 0.54),
+      0 0 36px rgba(124, 58, 237, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.46);
+  }
 }
 
 @keyframes sheen {
-  0%, 55%   { left: -45%; }
-  85%, 100% { left: 112%; }
+  0%, 55% {
+    left: -45%;
+  }
+  85%, 100% {
+    left: 112%;
+  }
 }
 
-#start-btn:hover,
-#start-btn:focus-visible {
+.primary-btn:hover,
+.primary-btn:focus-visible {
   transform: translateY(-2px) scale(1.02);
   filter: brightness(1.08);
   outline: none;
 }
 
-#start-btn:active {
+.primary-btn:active {
   transform: translateY(1px) scale(0.98);
   filter: brightness(0.96);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #start-btn { animation: none; }
-  #start-btn::after { display: none; }
+.controls-hint {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: rgba(186, 210, 245, 0.56);
+  letter-spacing: 0.03em;
 }
 
-@media (max-width:480px) {
-  #menu .panel { padding: 28px 20px; min-width: 260px; }
-  #start-btn { max-width: 100%; min-height: 48px; font-size: 17px; padding: 12px 20px; }
-  #hud { font-size: 13px; gap: 10px; left: 10px; top: 8px; padding: 6px 14px; }
-}
-
-/* 触摸设备下，确保触摸事件直接给到 Canvas，而不是被浏览器手势拦截 */
-#game-container, #game-canvas, canvas {
-  touch-action: none;
-}
-
-/* ====== Loading overlay ====== */
+/* ====== 加载遮罩 ====== */
 #loading {
   position: fixed;
   inset: 0;
-  z-index: 9999;               /* 高于菜单，阻止交互 */
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 20px;
   pointer-events: auto;
-  background: rgba(0,0,0,0.75);
+  background: radial-gradient(circle at 50% 42%, rgba(10, 24, 56, 0.92), rgba(3, 7, 18, 0.96));
+  transition: opacity 0.3s ease;
 }
 
-/* Circular progress loader centered */
-.loader-circle {
+#loading.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-  padding: 12px 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.06);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
+  gap: 14px;
+  min-width: 248px;
+  padding: 24px 28px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(16, 28, 58, 0.88), rgba(7, 13, 30, 0.9));
+  border: 1px solid rgba(96, 212, 255, 0.26);
+  box-shadow:
+    0 20px 54px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  text-align: center;
 }
-.progress { width:64px; height:64px; display:block; }
-.progress .bg { fill:none; stroke: rgba(255,255,255,0.08); stroke-width:2; }
-.progress .meter {
-  fill:none; stroke:#ffd166; stroke-width:3; stroke-linecap:round;
-  transition: stroke-dasharray 200ms linear;
-  transform: rotate(-90deg); transform-origin: 50% 50%;
-}
-.progress-text { font-size:14px; font-weight:600; color:#fff; }
 
-.sr-only {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
+.loader-ring-wrap {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress {
+  width: 78px;
+  height: 78px;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px rgba(0, 220, 255, 0.45));
+}
+
+.progress .bg {
+  fill: none;
+  stroke: rgba(148, 210, 255, 0.14);
+  stroke-width: 2.6;
+}
+
+.progress .meter {
+  fill: none;
+  stroke: url(#loader-grad);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.2s ease-out;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.progress-text {
+  position: absolute;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #e6f9ff;
+}
+
+.loading-status {
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.loading-error {
+  margin-top: 4px;
+}
+
+.loading-error[hidden] {
+  display: none;
+}
+
+.loading-error p {
+  margin: 0 0 12px;
+  max-width: 260px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fca5a5;
+}
+
+.retry-btn {
+  appearance: none;
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 212, 255, 0.55);
+  background: rgba(0, 180, 255, 0.22);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.14s ease;
+}
+
+.retry-btn:hover {
+  background: rgba(0, 180, 255, 0.36);
+}
+
+.retry-btn:active {
+  transform: scale(0.96);
+}
+
+/* ====== 无障碍与响应式适配 ====== */
+@media (prefers-reduced-motion: reduce) {
+  .primary-btn,
+  .panel-emblem img,
+  #hp-wrap.low .hp-bar-fill {
+    animation: none;
+  }
+
+  .primary-btn::after {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #hud {
+    top: 10px;
+    left: 10px;
+    gap: 7px;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+
+  .hud-label {
+    display: none;
+  }
+
+  .hp-bar-track {
+    width: 46px;
+  }
+
+  .weapon-pill {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  .hud-level,
+  .hud-weapon + .hud-divider {
+    display: none;
+  }
+
+  #hud-controls {
+    top: 10px;
+    right: 10px;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  #menu .panel {
+    padding: 26px 20px 22px;
+    border-radius: 22px;
+  }
+
+  .panel-emblem {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 12px;
+  }
+
+  .primary-btn {
+    width: 210px;
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .controls-hint {
+    font-size: 11px;
+  }
 }
